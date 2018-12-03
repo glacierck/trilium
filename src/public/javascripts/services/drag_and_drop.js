@@ -8,17 +8,28 @@ const dragAndDropSetup = {
             return false;
         }
 
+        node.setSelected(true);
+
+        // this is for dragging notes into relation map
+        // we allow to drag only one note at a time because it multi-drag conflicts with multiple single drags
+        // in UX and single drag is probably more useful
+        data.dataTransfer.setData("text", JSON.stringify({
+            noteId: node.data.noteId,
+            title: node.title
+        }));
+
         // This function MUST be defined to enable dragging for the tree.
         // Return false to cancel dragging of node.
         return true;
     },
-    dragEnter: (node, data) => true, // allow drop on any node
+    dragEnter: (node, data) => {
+        // we don't allow moving root to any other location in the tree
+        // we allow it to be placed on the relation map though, that's handled in a different drop handler
+        return node.data.noteId === 'root';
+    }, // allow drop on any node
     dragDrop: (node, data) => {
         // This function MUST be defined to enable dropping of items on the tree.
         // data.hitMode is 'before', 'after', or 'over'.
-
-        const nodeToMove = data.otherNode;
-        nodeToMove.setSelected(true);
 
         const selectedNodes = treeService.getSelectedNodes();
 

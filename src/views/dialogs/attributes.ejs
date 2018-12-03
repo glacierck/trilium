@@ -2,8 +2,11 @@
   <div class="modal-dialog modal-lg" style="max-width: 1000px" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Note attributes</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <h5 class="modal-title mr-auto">Note attributes</h5>
+
+        <button class="help-button" type="button" data-help-page="Attributes" title="Help on Attributes">?</button>
+
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="margin-left: 0;">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
@@ -22,6 +25,8 @@
               <tbody data-bind="foreach: ownedAttributes">
               <tr data-bind="if: !isDeleted">
                 <td>
+                  <input type="hidden" name="position" data-bind="value: position"/>
+
                   <select class="form-control attribute-type-select" style="width: auto;"
                       data-bind="options: $parent.availableTypes, optionsText: 'text', optionsValue: 'value', value: type, event: { change: $parent.typeChanged }"></select>
                 </td>
@@ -43,6 +48,10 @@
                     <input class="form-control relation-target-note-id"
                          placeholder="search for note by its name"
                          data-bind="noteAutocomplete, value: relationValue, valueUpdate: 'blur', event: { blur: $parent.attributeChanged }">
+
+                    <div style="color: red" data-bind="if: $parent.isEmptyRelationTarget($index())">Relation target note
+                      can't be empty.
+                    </div>
                   </div>
 
                   <div data-bind="visible: type == 'label-definition'">
@@ -55,6 +64,11 @@
                            data-bind="checked: labelDefinition.isPromoted"/>
                       Promoted
                     </label>
+
+                    <div data-bind="visible: labelDefinition.labelType === 'number'"
+                        title="Precision of floating point numbers - 0 means effectively integer, 2 allows entering e.g. 1.23">
+                      Number precision: <input type="number" min="0" max="9" data-bind="value: labelDefinition.numberPrecision" style="width: 50px;"/>
+                    </div>
                   </div>
 
                   <div data-bind="visible: type == 'relation-definition'">
@@ -65,13 +79,20 @@
                            data-bind="checked: relationDefinition.isPromoted"/>
                       Promoted
                     </label>
+                    <br/>
+                    <label>
+                      Inverse relation:
+
+                      <input type="text" value="true" class="attribute-name" data-bind="value: relationDefinition.inverseRelation"/>
+                    </label>
                   </div>
                 </td>
                 <td title="Inheritable relations are automatically inherited to the child notes">
                   <input type="checkbox" value="1" data-bind="checked: isInheritable"/>
 
-                  <span title="Delete" style="padding: 13px; cursor: pointer;"
-                      class="glyphicon glyphicon-trash"
+                  &nbsp;
+
+                  <span title="Delete" style="padding: 13px; cursor: pointer;" class="jam jam-trash"
                       data-bind="click: $parent.deleteAttribute"></span>
                 </td>
               </tr>
@@ -118,13 +139,9 @@
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <div class="modal-footer">
           <button class="btn btn-primary btn-large" style="width: 200px;" id="save-attributes-button" type="submit">
             Save changes <kbd>enter</kbd></button>
-
-          <button class="btn btn-sm" type="button" data-help-page="Attributes">
-            <i class="glyphicon glyphicon-info-sign"></i> Help
-          </button>
         </div>
       </form>
     </div>

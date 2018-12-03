@@ -7,7 +7,7 @@ function setupTooltip() {
     $(document).on("mouseenter", "a", async function() {
         const $link = $(this);
 
-        if ($link.hasClass("no-tooltip-preview")) {
+        if ($link.hasClass("no-tooltip-preview") || $link.hasClass("disabled")) {
             return;
         }
 
@@ -41,6 +41,10 @@ function setupTooltip() {
         if ($(this).is(":hover")) {
             $(this).tooltip({
                 delay: {"show": 300, "hide": 100},
+                container: 'body',
+                placement: 'auto',
+                trigger: 'manual',
+                boundary: 'window',
                 title: html,
                 html: true
             });
@@ -49,9 +53,12 @@ function setupTooltip() {
         }
     });
 
-    $(document).on("mouseleave", "a", async function() {
-        $(this).tooltip('hide');
+    $(document).on("mouseleave", "a", function() {
+        $(this).tooltip('dispose');
     });
+
+    // close any tooltip after click, this fixes the problem that sometimes tooltips remained on the screen
+    $(document).on("click", () => $('.tooltip').remove());
 }
 
 async function renderTooltip(note, attributes) {
@@ -99,11 +106,18 @@ async function renderTooltip(note, attributes) {
         content += note.content;
     }
     else if (note.type === 'code') {
-        content += $("<pre>").text(note.content).prop('outerHTML');
+        content += $("<pre>")
+            .text(note.content)
+            .prop('outerHTML');
+    }
+    else if (note.type === 'image') {
+        content += $("<img>")
+            .prop("src", `/api/images/${note.noteId}/${note.title}`)
+            .prop('outerHTML');
     }
     // other types of notes don't have tooltip preview
 
-    if (!$(content).text().trim()) {
+    if (!$(content).text().trim() && note.type !== 'image') {
         return "";
     }
 

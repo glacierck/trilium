@@ -1,3 +1,4 @@
+import contextMenuWidget from './context_menu.js';
 import treeContextMenuService from './tree_context_menu.js';
 import dragAndDropSetup from './drag_and_drop.js';
 import linkService from './link.js';
@@ -15,7 +16,6 @@ import Branch from '../entities/branch.js';
 import NoteShort from '../entities/note_short.js';
 
 const $tree = $("#tree");
-const $treeContextMenu = $("#tree-context-menu");
 const $createTopLevelNoteButton = $("#create-top-level-note-button");
 const $collapseTreeButton = $("#collapse-tree-button");
 const $scrollToCurrentNoteButton = $("#scroll-to-current-note-button");
@@ -111,6 +111,10 @@ async function expandToNote(notePath, expandOpts) {
 async function activateNote(notePath, newNote) {
     utils.assertArguments(notePath);
 
+    if (glob.activeDialog) {
+        glob.activeDialog.modal('hide');
+    }
+
     const node = await expandToNote(notePath);
 
     if (newNote) {
@@ -152,6 +156,11 @@ async function getRunPath(notePath) {
 
         if (childNoteId !== null) {
             const child = await treeCache.getNote(childNoteId);
+
+            if (!child) {
+                console.log("Can't find " + childNoteId);
+            }
+
             const parents = await child.getParentNotes();
 
             if (!parents) {
@@ -160,10 +169,10 @@ async function getRunPath(notePath) {
             }
 
             if (!parents.some(p => p.noteId === parentNoteId)) {
-                console.log(utils.now(), "Did not find parent " + parentNoteId + " for child " + childNoteId);
+                console.debug(utils.now(), "Did not find parent " + parentNoteId + " for child " + childNoteId);
 
                 if (parents.length > 0) {
-                    console.log(utils.now(), "Available parents:", parents);
+                    console.debug(utils.now(), "Available parents:", parents);
 
                     const someNotePath = await getSomeNotePath(parents[0]);
 
@@ -198,33 +207,51 @@ async function getRunPath(notePath) {
     return effectivePath.reverse();
 }
 
+async function addPath(notePath, isCurrent) {
+    const title = await treeUtils.getNotePathTitle(notePath);
+
+    const noteLink = await linkService.createNoteLink(notePath, title);
+
+    noteLink
+        .addClass("no-tooltip-preview")
+        .addClass("dropdown-item");
+
+    if (isCurrent) {
+        noteLink.addClass("current");
+    }
+
+    $notePathList.append(noteLink);
+}
+
 async function showPaths(noteId, node) {
     utils.assertArguments(noteId, node);
 
     const note = await treeCache.getNote(noteId);
-    const parents = await note.getParentNotes();
 
-    $notePathCount.html(parents.length + " path" + (parents.length > 0 ? "s" : ""));
+    if (note.noteId === 'root') {
+        // root doesn't have any parent, but it's still technically 1 path
 
-    $notePathList.empty();
+        $notePathCount.html("1 path");
 
-    for (const parentNote of parents) {
-        const parentNotePath = await getSomeNotePath(parentNote);
-        // this is to avoid having root notes leading '/'
-        const notePath = parentNotePath ? (parentNotePath + '/' + noteId) : noteId;
-        const title = await treeUtils.getNotePathTitle(notePath);
+        $notePathList.empty();
 
-        const noteLink = await linkService.createNoteLink(notePath, title);
+        await addPath('root', true);
+    }
+    else {
+        const parents = await note.getParentNotes();
 
-        noteLink.addClass("no-tooltip-preview");
+        $notePathCount.html(parents.length + " path" + (parents.length > 1 ? "s" : ""));
 
-        const item = $("<li/>").append(noteLink);
+        $notePathList.empty();
 
-        if (node.getParent().data.noteId === parentNote.noteId) {
-            item.addClass("current");
+        for (const parentNote of parents) {
+            const parentNotePath = await getSomeNotePath(parentNote);
+            // this is to avoid having root notes leading '/'
+            const notePath = parentNotePath ? (parentNotePath + '/' + noteId) : noteId;
+            const isCurrent = node.getParent().data.noteId === parentNote.noteId;
+
+            await addPath(notePath, isCurrent);
         }
-
-        $notePathList.append(item);
     }
 }
 
@@ -378,60 +405,10 @@ function initFancyTree(tree) {
         }
     });
 
-    $treeContextMenu.on('click', '.dropdown-item', function(e) {
-        const cmd = $(e.target).prop("data-cmd");
-
-        treeContextMenuService.selectContextMenuItem(e, cmd);
-    });
-
-    async function openContextMenu(e) {
-        $treeContextMenu.empty();
-
-        const contextMenuItems = await treeContextMenuService.getContextMenuItems(e);
-
-        for (const item of contextMenuItems) {
-            if (item.title === '----') {
-                $treeContextMenu.append($("<div>").addClass("dropdown-divider"));
-            } else {
-                const $item = $("<a>")
-                    .addClass("dropdown-item")
-                    .prop("data-cmd", item.cmd)
-                    .append(item.title);
-
-                if (item.enabled !== undefined && !item.enabled) {
-                    $item.addClass("disabled");
-                }
-
-                $treeContextMenu.append($item);
-            }
-        }
-
-        // code below tries to detect when dropdown would overflow from page
-        // in such case we'll position it above click coordinates so it will fit into client
-        const clickPosition = e.pageY;
-        const clientHeight = document.documentElement.clientHeight;
-        const contextMenuHeight = $treeContextMenu.height();
-
-        let top;
-
-        if (clickPosition + contextMenuHeight > clientHeight) {
-            top = clientHeight - contextMenuHeight - 10;
-        }
-        else {
-            top = e.pageY - 10;
-        }
-
-        $treeContextMenu.css({
-            display: "block",
-            top: top,
-            left: e.pageX - 20
-        }).addClass("show");
-    }
-
-    $(document).click(() => $(".context-menu").hide());
-
     $tree.on('contextmenu', '.fancytree-node', function(e) {
-        openContextMenu(e);
+        treeContextMenuService.getContextMenuItems(e).then(contextMenuItems => {
+            contextMenuWidget.initContextMenu(e, contextMenuItems, treeContextMenuService.selectContextMenuItem);
+        });
 
         return false; // blocks default browser right click menu
     });
@@ -523,6 +500,12 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
     if (noteDetailService.getCurrentNoteType() !== 'text') {
         saveSelection = false;
     }
+    else {
+        // just disable this feature altogether - there's a problem that note containing image or table at the beginning
+        // of the content will be auto-selected by CKEditor and then CTRL-P with no user interaction will automatically save
+        // the selection - see https://github.com/ckeditor/ckeditor5/issues/1384
+        saveSelection = false;
+    }
 
     let title, content;
 
@@ -561,7 +544,8 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
         refKey: branchEntity.noteId,
         branchId: branchEntity.branchId,
         isProtected: isProtected,
-        extraClasses: await treeBuilder.getExtraClasses(noteEntity)
+        extraClasses: await treeBuilder.getExtraClasses(noteEntity),
+        icon: treeBuilder.getIcon(noteEntity)
     };
 
     if (target === 'after') {
@@ -585,8 +569,6 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
     }
 
     clearSelectedNodes(); // to unmark previously active node
-
-    infoService.showMessage("Created!");
 
     return {note, branch};
 }
@@ -659,7 +641,7 @@ $(window).bind('hashchange', function() {
     const notePath = getNotePathFromAddress();
 
     if (getCurrentNotePath() !== notePath) {
-        console.log("Switching to " + notePath + " because of hash change");
+        console.debug("Switching to " + notePath + " because of hash change");
 
         activateNote(notePath);
     }

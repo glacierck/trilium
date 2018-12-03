@@ -6,6 +6,8 @@ import noteSourceDialog from '../dialogs/note_source.js';
 import recentChangesDialog from '../dialogs/recent_changes.js';
 import optionsDialog from '../dialogs/options.js';
 import sqlConsoleDialog from '../dialogs/sql_console.js';
+import markdownImportDialog from '../dialogs/markdown_import.js';
+import exportDialog from '../dialogs/export.js';
 
 import cloning from './cloning.js';
 import contextMenu from './tree_context_menu.js';
@@ -37,6 +39,7 @@ window.glob.getHeaders = server.getHeaders;
 window.glob.showAddLinkDialog = addLinkDialog.showDialog;
 // this is required by CKEditor when uploading images
 window.glob.noteChanged = noteDetailService.noteChanged;
+window.glob.refreshTree = treeService.reload;
 
 // required for ESLint plugin
 window.glob.getCurrentNote = noteDetailService.getCurrentNote;
@@ -101,7 +104,28 @@ if (utils.isElectron()) {
     });
 }
 
-$("#export-note-to-markdown-button").click(() => exportService.exportSubtree(noteDetailService.getCurrentNoteId(), 'markdown-single'));
+function exec(cmd) {
+    document.execCommand(cmd);
+
+    return false;
+}
+
+if (utils.isElectron() && utils.isMac()) {
+    utils.bindShortcut('ctrl+c', () => exec("copy"));
+    utils.bindShortcut('ctrl+v', () => exec('paste'));
+    utils.bindShortcut('ctrl+x', () => exec('cut'));
+    utils.bindShortcut('ctrl+a', () => exec('selectAll'));
+    utils.bindShortcut('ctrl+z', () => exec('undo'));
+    utils.bindShortcut('ctrl+y', () => exec('redo'));
+}
+
+$("#export-note-button").click(function () {
+    if ($(this).hasClass("disabled")) {
+        return;
+    }
+
+    exportDialog.showDialog('single');
+});
 
 treeService.showTree();
 

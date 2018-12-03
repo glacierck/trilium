@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 
-if [[ $# -eq 0 ]] ; then
-    echo "Missing argument of new version"
-    exit 1
-fi
-
-VERSION=$1
 PKG_DIR=dist/trilium-linux-x64-server
-NODE_VERSION=10.12.0
+NODE_VERSION=10.14.1
 
 rm -r $PKG_DIR
 mkdir $PKG_DIR
@@ -35,4 +29,5 @@ chmod 755 trilium.sh
 
 cd ..
 
+VERSION=`jq -r ".version" package.json`
 7z a trilium-linux-x64-server-${VERSION}.7z trilium-linux-x64-server

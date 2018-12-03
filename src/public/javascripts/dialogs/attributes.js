@@ -2,7 +2,8 @@ import noteDetailService from '../services/note_detail.js';
 import server from '../services/server.js';
 import infoService from "../services/info.js";
 import treeUtils from "../services/tree_utils.js";
-import linkService from "../services/link.js";
+import attributeService from "../services/attributes.js";
+import attributeAutocompleteService from "../services/attribute_autocomplete.js";
 
 const $dialog = $("#attributes-dialog");
 const $saveAttributesButton = $("#save-attributes-button");
@@ -66,11 +67,13 @@ function AttributesModel() {
             attr.labelDefinition = (attr.type === 'label-definition' && attr.value) ? attr.value : {
                 labelType: "text",
                 multiplicityType: "singlevalue",
-                isPromoted: true
+                isPromoted: true,
+                numberPrecision: 0
             };
 
             attr.relationDefinition = (attr.type === 'relation-definition' && attr.value) ? attr.value : {
                 multiplicityType: "singlevalue",
+                inverseRelation: "",
                 isPromoted: true
             };
 
@@ -112,7 +115,7 @@ function AttributesModel() {
 
     function isValid() {
         for (let attributes = self.ownedAttributes(), i = 0; i < attributes.length; i++) {
-            if (self.isEmptyName(i)) {
+            if (self.isEmptyName(i) || self.isEmptyRelationTarget(i)) {
                 return false;
             }
         }
@@ -165,7 +168,7 @@ function AttributesModel() {
 
         infoService.showMessage("Attributes have been saved.");
 
-        noteDetailService.refreshAttributes();
+        attributeService.refreshAttributes();
     };
 
     function addLastEmptyRow() {
@@ -185,10 +188,12 @@ function AttributesModel() {
                 labelDefinition: {
                     labelType: "text",
                     multiplicityType: "singlevalue",
-                    isPromoted: true
+                    isPromoted: true,
+                    numberPrecision: 0
                 },
                 relationDefinition: {
                     multiplicityType: "singlevalue",
+                    inverseRelation: "",
                     isPromoted: true
                 }
             }));
@@ -206,7 +211,35 @@ function AttributesModel() {
     this.isEmptyName = function(index) {
         const cur = self.ownedAttributes()[index]();
 
-        return cur.name.trim() === "" && !cur.isDeleted && (cur.attributeId !== "" || cur.labelValue !== "" || cur.relationValue);
+        if (cur.name.trim() || cur.isDeleted) {
+            return false;
+        }
+
+        if (cur.attributeId) {
+            // name is empty and attribute already exists so this is NO-GO
+            return true;
+        }
+
+        if (cur.type === 'relation-definition' || cur.type === 'label-definition') {
+            // for definitions there's no possible empty value so we always require name
+            return true;
+        }
+
+        if (cur.type === 'label' && cur.labelValue) {
+            return true;
+        }
+
+        if (cur.type === 'relation' && cur.relationValue) {
+            return true;
+        }
+
+        return false;
+    };
+
+    this.isEmptyRelationTarget = function(index) {
+        const cur = self.ownedAttributes()[index]();
+
+        return cur.type === "relation" && !cur.isDeleted && cur.name && !cur.relationValue;
     };
 
     this.getTargetAttribute = function(target) {
@@ -231,69 +264,21 @@ async function showDialog() {
 }
 
 $dialog.on('focus', '.attribute-name', function (e) {
-    if (!$(this).hasClass("aa-input")) {
-        $(this).autocomplete({
-            appendTo: document.querySelector('body'),
-            hint: false,
-            autoselect: true,
-            openOnFocus: true,
-            minLength: 0
-        }, [{
-            displayKey: 'name',
-            source: async (term, cb) => {
-                const attribute = attributesModel.getTargetAttribute(this);
-                const type = (attribute().type === 'relation' || attribute().type === 'relation-definition') ? 'relation' : 'label';
-                const names = await server.get('attributes/names/?type=' + type + '&query=' + encodeURIComponent(term));
-                const result = names.map(name => {
-                    return {name};
-                });
-
-                if (result.length === 0) {
-                    result.push({name: "No results"})
-                }
-
-                cb(result);
-            }
-            }]);
-    }
-
-    $(this).autocomplete("open");
+    attributeAutocompleteService.initAttributeNameAutocomplete({
+        $el: $(this),
+        attributeType: () => {
+            const attribute = attributesModel.getTargetAttribute(this);
+            return (attribute().type === 'relation' || attribute().type === 'relation-definition') ? 'relation' : 'label';
+        },
+        open: true
+    });
 });
 
-$dialog.on('focus', '.label-value', async function (e) {
-    if (!$(this).hasClass("aa-input")) {
-        const attributeName = $(this).parent().parent().find('.attribute-name').val();
-
-        if (attributeName.trim() === "") {
-            return;
-        }
-
-        const attributeValues = (await server.get('attributes/values/' + encodeURIComponent(attributeName)))
-            .map(attribute => { return { value: attribute }; });
-
-        if (attributeValues.length === 0) {
-            return;
-        }
-
-        $(this).autocomplete({
-            appendTo: document.querySelector('body'),
-            hint: false,
-            autoselect: true,
-            openOnFocus: true,
-            minLength: 0
-        }, [{
-            displayKey: 'value',
-            source: function (term, cb) {
-                term = term.toLowerCase();
-
-                const filtered = attributeValues.filter(attr => attr.value.toLowerCase().includes(term));
-
-                cb(filtered);
-            }
-        }]);
-    }
-
-    $(this).autocomplete("open");
+$dialog.on('focus', '.label-value', function (e) {
+    attributeAutocompleteService.initLabelValueAutocomplete({
+        $el: $(this),
+        open: true
+    })
 });
 
 export default {

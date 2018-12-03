@@ -24,11 +24,8 @@ async function updateEntity(sync, entity, sourceId) {
     else if (entityName === 'recent_notes') {
         await updateRecentNotes(entity, sourceId);
     }
-    else if (entityName === 'images') {
-        await updateImage(entity, sourceId);
-    }
-    else if (entityName === 'note_images') {
-        await updateNoteImage(entity, sourceId);
+    else if (entityName === 'links') {
+        await updateLink(entity, sourceId);
     }
     else if (entityName === 'attributes') {
         await updateAttribute(entity, sourceId);
@@ -139,35 +136,17 @@ async function updateRecentNotes(entity, sourceId) {
     }
 }
 
-async function updateImage(entity, sourceId) {
-    if (entity.data !== null) {
-        entity.data = Buffer.from(entity.data, 'base64');
-    }
+async function updateLink(entity, sourceId) {
+    const origLink = await sql.getRow("SELECT * FROM links WHERE linkId = ?", [entity.linkId]);
 
-    const origImage = await sql.getRow("SELECT * FROM images WHERE imageId = ?", [entity.imageId]);
-
-    if (!origImage || origImage.dateModified <= entity.dateModified) {
+    if (!origLink || origLink.dateModified <= entity.dateModified) {
         await sql.transactional(async () => {
-            await sql.replace("images", entity);
+            await sql.replace("links", entity);
 
-            await syncTableService.addImageSync(entity.imageId, sourceId);
+            await syncTableService.addLinkSync(entity.linkId, sourceId);
         });
 
-        log.info("Update/sync image " + entity.imageId);
-    }
-}
-
-async function updateNoteImage(entity, sourceId) {
-    const origNoteImage = await sql.getRow("SELECT * FROM note_images WHERE noteImageId = ?", [entity.noteImageId]);
-
-    if (!origNoteImage || origNoteImage.dateModified <= entity.dateModified) {
-        await sql.transactional(async () => {
-            await sql.replace("note_images", entity);
-
-            await syncTableService.addNoteImageSync(entity.noteImageId, sourceId);
-        });
-
-        log.info("Update/sync note image " + entity.noteImageId);
+        log.info("Update/sync link " + entity.linkId);
     }
 }
 

@@ -38,7 +38,8 @@ async function load() {
 function highlightResults(results, allTokens) {
     // we remove < signs because they can cause trouble in matching and overwriting existing highlighted chunks
     // which would make the resulting HTML string invalid.
-    allTokens = allTokens.map(token => token.replace('/</g', ''));
+    // { and } are used for marking <b> and </b> tag (to avoid matches on single 'b' character)
+    allTokens = allTokens.map(token => token.replace('/[<\{\}]/g', ''));
 
     // sort by the longest so we first highlight longest matches
     allTokens.sort((a, b) => a.length > b.length ? -1 : 1);
@@ -51,8 +52,14 @@ function highlightResults(results, allTokens) {
         const tokenRegex = new RegExp("(" + utils.escapeRegExp(token) + ")", "gi");
 
         for (const result of results) {
-            result.highlighted = result.highlighted.replace(tokenRegex, "<b>$1</b>");
+            result.highlighted = result.highlighted.replace(tokenRegex, "{$1}");
         }
+    }
+
+    for (const result of results) {
+        result.highlighted = result.highlighted
+            .replace(/{/g, "<b>")
+            .replace(/}/g, "</b>");
     }
 }
 
@@ -80,7 +87,7 @@ function findNotes(query) {
             continue;
         }
 
-        // for leaf note it doesn't matter if "archived" label inheritable or not
+        // for leaf note it doesn't matter if "archived" label is inheritable or not
         if (noteId in archived) {
             continue;
         }
@@ -113,11 +120,28 @@ function findNotes(query) {
         }
     }
 
-    results.sort((a, b) => a.title < b.title ? -1 : 1);
+    // sort results by depth of the note. This is based on the assumption that more important results
+    // are closer to the note root.
+    results.sort((a, b) => {
+        if (a.pathArray.length === b.pathArray.length) {
+            return a.title < b.title ? -1 : 1;
+        }
 
-    highlightResults(results, allTokens);
+        return a.pathArray.length < b.pathArray.length ? -1 : 1;
+    });
 
-    return results;
+    const apiResults = results.slice(0, 200).map(res => {
+        return {
+            noteId: res.noteId,
+            branchId: res.branchId,
+            path: res.pathArray.join('/'),
+            title: res.titleArray.join(' / ')
+        };
+    });
+
+    highlightResults(apiResults, allTokens);
+
+    return apiResults;
 }
 
 function search(noteId, tokens, path, results) {
@@ -125,15 +149,14 @@ function search(noteId, tokens, path, results) {
         const retPath = getSomePath(noteId, path);
 
         if (retPath) {
-            const noteTitle = getNoteTitleForPath(retPath);
             const thisNoteId = retPath[retPath.length - 1];
             const thisParentNoteId = retPath[retPath.length - 2];
 
             results.push({
                 noteId: thisNoteId,
                 branchId: childParentToBranchId[`${thisNoteId}-${thisParentNoteId}`],
-                title: noteTitle,
-                path: retPath.join('/')
+                pathArray: retPath,
+                titleArray: getNoteTitleArrayForPath(retPath)
             });
         }
 
@@ -146,10 +169,6 @@ function search(noteId, tokens, path, results) {
     }
 
     for (const parentNoteId of parents) {
-        if (results.length >= 200) {
-            return;
-        }
-
         // archived must be inheritable
         if (archived[parentNoteId] === 1) {
             continue;
@@ -192,12 +211,12 @@ function getNoteTitle(noteId, parentNoteId) {
     return (prefix ? (prefix + ' - ') : '') + title;
 }
 
-function getNoteTitleForPath(path) {
+function getNoteTitleArrayForPath(path) {
     const titles = [];
 
     if (path[0] === 'root') {
         if (path.length === 1) {
-            return getNoteTitle('root');
+            return [ getNoteTitle('root') ];
         }
         else {
             path = path.slice(1);
@@ -212,6 +231,12 @@ function getNoteTitleForPath(path) {
         titles.push(title);
         parentNoteId = noteId;
     }
+
+    return titles;
+}
+
+function getNoteTitleForPath(path) {
+    const titles = getNoteTitleArrayForPath(path);
 
     return titles.join(' / ');
 }
@@ -274,14 +299,7 @@ eventService.subscribe(eventService.ENTITY_CHANGED, async ({entityName, entity})
             delete childToParent[note.noteId];
         }
         else {
-            if (note.isProtected) {
-                if (protectedSessionService.isProtectedSessionAvailable()) {
-                    protectedNoteTitles[note.noteId] = protectedSessionService.decryptNoteTitle(note.noteId, note.title);
-                }
-            }
-            else {
-                noteTitles[note.noteId] = note.title;
-            }
+            noteTitles[note.noteId] = note.title;
         }
     }
     else if (entityName === 'branches') {
@@ -309,11 +327,11 @@ eventService.subscribe(eventService.ENTITY_CHANGED, async ({entityName, entity})
 
         if (attribute.type === 'label' && attribute.name === 'archived') {
             // we're not using label object directly, since there might be other non-deleted archived label
-            const hideLabel = await repository.getEntity(`SELECT * FROM attributes WHERE isDeleted = 0 AND type = 'label' 
+            const archivedLabel = await repository.getEntity(`SELECT * FROM attributes WHERE isDeleted = 0 AND type = 'label' 
                                  AND name = 'archived' AND noteId = ?`, [attribute.noteId]);
 
-            if (hideLabel) {
-                archived[attribute.noteId] = hideLabel.isInheritable ? 1 : 0;
+            if (archivedLabel) {
+                archived[attribute.noteId] = archivedLabel.isInheritable ? 1 : 0;
             }
             else {
                 delete archived[attribute.noteId];

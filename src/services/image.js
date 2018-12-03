@@ -1,8 +1,8 @@
 "use strict";
 
-const utils = require('./utils');
-const Image = require('../entities/image');
-const NoteImage = require('../entities/note_image');
+const repository = require('./repository');
+const protectedSessionService = require('./protected_session');
+const noteService = require('./notes');
 const imagemin = require('imagemin');
 const imageminMozJpeg = require('imagemin-mozjpeg');
 const imageminPngQuant = require('imagemin-pngquant');
@@ -11,31 +11,32 @@ const jimp = require('jimp');
 const imageType = require('image-type');
 const sanitizeFilename = require('sanitize-filename');
 
-async function saveImage(buffer, originalName, noteId) {
+async function saveImage(buffer, originalName, parentNoteId) {
     const resizedImage = await resize(buffer);
     const optimizedImage = await optimize(resizedImage);
 
     const imageFormat = imageType(optimizedImage);
 
+    const parentNote = await repository.getNote(parentNoteId);
+
     const fileNameWithoutExtension = originalName.replace(/\.[^/.]+$/, "");
     const fileName = sanitizeFilename(fileNameWithoutExtension + "." + imageFormat.ext);
 
-    const image = await new Image({
-        format: imageFormat.ext,
-        name: fileName,
-        checksum: utils.hash(optimizedImage),
-        data: optimizedImage
-    }).save();
-
-    await new NoteImage({
-        noteId: noteId,
-        imageId: image.imageId
-    }).save();
+    const {note} = await noteService.createNote(parentNoteId, fileName, optimizedImage, {
+        target: 'into',
+        type: 'image',
+        isProtected: parentNote.isProtected && protectedSessionService.isProtectedSessionAvailable(),
+        mime: 'image/' + imageFormat.ext.toLowerCase(),
+        attributes: [
+            { type: 'label', name: 'originalFileName', value: originalName },
+            { type: 'label', name: 'fileSize', value: optimizedImage.byteLength }
+        ]
+    });
 
     return {
         fileName,
-        imageId: image.imageId,
-        url: `/api/images/${image.imageId}/${fileName}`
+        noteId: note.noteId,
+        url: `/api/images/${note.noteId}/${fileName}`
     };
 }
 

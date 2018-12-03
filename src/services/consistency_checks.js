@@ -5,6 +5,7 @@ const sqlInit = require('./sql_init');
 const log = require('./log');
 const messagingService = require('./messaging');
 const syncMutexService = require('./sync_mutex');
+const repository = require('./repository.js');
 const cls = require('./cls');
 
 async function runCheck(query, errorText, errorList) {
@@ -87,6 +88,17 @@ async function runSyncRowChecks(table, key, errorList) {
           sync.entityName = '${table}' 
           AND ${key} IS NULL`,
         `Missing ${table} records for existing sync rows`, errorList);
+}
+
+async function fixEmptyRelationTargets(errorList) {
+    const emptyRelations = await repository.getEntities("SELECT * FROM attributes WHERE isDeleted = 0 AND type = 'relation' AND value = ''");
+
+    for (const relation of emptyRelations) {
+        relation.isDeleted = true;
+        await relation.save();
+
+        errorList.push(`Relation ${relation.attributeId} of name "${relation.name} has empty target. Autofixed.`);
+    }
 }
 
 async function runAllChecks() {
@@ -184,33 +196,28 @@ async function runAllChecks() {
 
     await runCheck(`
           SELECT 
-            images.imageId
-          FROM 
-            images
-            LEFT JOIN note_images ON note_images.imageId = images.imageId
-          WHERE 
-            note_images.noteImageId IS NULL`,
-        "Image with no note relation", errorList);
-
-    await runCheck(`
-          SELECT 
-            note_images.noteImageId
-          FROM 
-            note_images
-            JOIN images USING(imageId)
-          WHERE 
-            note_images.isDeleted = 0
-            AND images.isDeleted = 1`,
-        "Note image is not deleted while image is deleted for noteImageId", errorList);
-
-    await runCheck(`
-          SELECT 
             noteId
           FROM 
             notes
           WHERE 
-            type != 'text' AND type != 'code' AND type != 'render' AND type != 'file' AND type != 'search' AND type != 'relation-map'`,
+            type != 'text' 
+            AND type != 'code' 
+            AND type != 'render' 
+            AND type != 'file' 
+            AND type != 'image' 
+            AND type != 'search' 
+            AND type != 'relation-map'`,
         "Note has invalid type", errorList);
+
+    await runCheck(`
+          SELECT
+            noteId
+          FROM
+            notes
+          WHERE
+            isDeleted = 0
+            AND content IS NULL`,
+        "Note content is null even though it is not deleted", errorList);
 
     await runCheck(`
           SELECT 
@@ -222,12 +229,71 @@ async function runAllChecks() {
             type == 'search'`,
         "Search note has children", errorList);
 
+    await fixEmptyRelationTargets(errorList);
+
+    await runCheck(`
+          SELECT 
+            attributeId
+          FROM 
+            attributes
+          WHERE 
+            type != 'label' 
+            AND type != 'label-definition' 
+            AND type != 'relation'
+            AND type != 'relation-definition'`,
+        "Attribute has invalid type", errorList);
+
+    await runCheck(`
+          SELECT 
+            attributeId
+          FROM 
+            attributes
+            LEFT JOIN notes ON attributes.noteId = notes.noteId AND notes.isDeleted = 0
+          WHERE
+            attributes.isDeleted = 0
+            AND notes.noteId IS NULL`,
+        "Attribute reference to the owning note is broken", errorList);
+
+    await runCheck(`
+          SELECT
+            attributeId
+          FROM
+            attributes
+            LEFT JOIN notes AS targetNote ON attributes.value = targetNote.noteId AND targetNote.isDeleted = 0
+          WHERE
+            attributes.type = 'relation'
+            AND attributes.isDeleted = 0
+            AND targetNote.noteId IS NULL`,
+        "Relation reference to the target note is broken", errorList);
+
+    await runCheck(`
+          SELECT 
+            linkId
+          FROM 
+            links
+          WHERE 
+            type != 'image'
+            AND type != 'hyper'
+            AND type != 'relation-map'`,
+        "Link type is invalid", errorList);
+
+    await runCheck(`
+          SELECT 
+            linkId
+          FROM 
+            links
+            LEFT JOIN notes AS sourceNote ON sourceNote.noteId = links.noteId AND sourceNote.isDeleted = 0
+            LEFT JOIN notes AS targetNote ON targetNote.noteId = links.noteId AND targetNote.isDeleted = 0
+          WHERE 
+            links.isDeleted = 0
+            AND (sourceNote.noteId IS NULL
+                 OR targetNote.noteId IS NULL)`,
+        "Link to source/target note link is broken", errorList);
+
     await runSyncRowChecks("notes", "noteId", errorList);
     await runSyncRowChecks("note_revisions", "noteRevisionId", errorList);
     await runSyncRowChecks("branches", "branchId", errorList);
     await runSyncRowChecks("recent_notes", "branchId", errorList);
-    await runSyncRowChecks("images", "imageId", errorList);
-    await runSyncRowChecks("note_images", "noteImageId", errorList);
     await runSyncRowChecks("attributes", "attributeId", errorList);
     await runSyncRowChecks("api_tokens", "apiTokenId", errorList);
     await runSyncRowChecks("options", "name", errorList);

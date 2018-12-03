@@ -8,30 +8,13 @@ echo "Deleting existing builds"
 
 rm -r dist/*
 
-echo "Rebuilding binaries for linux-ia32"
-./node_modules/.bin/electron-rebuild --arch=ia32
+bin/build-linux-ia32.sh
 
-./node_modules/.bin/electron-packager . --out=dist --platform=linux --arch=ia32 --overwrite
+bin/build-win-x64.sh
 
-./node_modules/.bin/electron-packager . --out=dist --platform=win32 --arch=x64 --overwrite
+bin/build-mac-x64.sh
 
-# we build x64 as second so that we keep X64 binaries in node_modules for local development and server build
-echo "Rebuilding binaries for linux-x64"
-./node_modules/.bin/electron-rebuild --arch=x64
+# building X64 linux as the last so electron-rebuild will prepare X64 binaries for local development
+bin/build-linux-x64.sh
 
-./node_modules/.bin/electron-packager . --out=dist --platform=linux --arch=x64 --overwrite
-
-echo "Copying required windows binaries"
-
-WIN_RES_DIR=./dist/trilium-win32-x64/resources/app
-
-cp -r bin/deps/sqlite/* $WIN_RES_DIR/node_modules/sqlite3/lib/binding/
-cp bin/deps/image/cjpeg.exe $WIN_RES_DIR/node_modules/mozjpeg/vendor/
-cp bin/deps/image/pngquant.exe $WIN_RES_DIR/node_modules/pngquant-bin/vendor/
-cp bin/deps/image/gifsicle.exe $WIN_RES_DIR/node_modules/giflossy/vendor/
-
-echo "Cleaning up unnecessary binaries from all builds"
-
-rm -r ./dist/trilium-linux-ia32/resources/app/bin/deps
-rm -r ./dist/trilium-linux-x64/resources/app/bin/deps
-rm -r ./dist/trilium-win32-x64/resources/app/bin/deps
+bin/build-server.sh

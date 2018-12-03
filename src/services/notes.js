@@ -7,7 +7,7 @@ const eventService = require('./events');
 const repository = require('./repository');
 const cls = require('../services/cls');
 const Note = require('../entities/note');
-const NoteImage = require('../entities/note_image');
+const Link = require('../entities/link');
 const NoteRevision = require('../entities/note_revision');
 const Branch = require('../entities/branch');
 const Attribute = require('../entities/attribute');
@@ -45,10 +45,24 @@ async function triggerNoteTitleChanged(note) {
     await eventService.emit(eventService.NOTE_TITLE_CHANGED, note);
 }
 
+/**
+ * FIXME: noteData has mandatory property "target", it might be better to add it as parameter to reflect this
+ */
 async function createNewNote(parentNoteId, noteData) {
-    const newNotePos = await getNewNotePosition(parentNoteId, noteData);
+    let newNotePos;
+
+    if (noteData.notePosition !== undefined) {
+        newNotePos = noteData.notePosition;
+    }
+    else {
+        newNotePos = await getNewNotePosition(parentNoteId, noteData);
+    }
 
     const parentNote = await repository.getNote(parentNoteId);
+
+    if (!parentNote) {
+        throw new Error(`Parent note ${parentNoteId} not found.`);
+    }
 
     if (!noteData.type) {
         if (parentNote.type === 'text' || parentNote.type === 'code') {
@@ -65,9 +79,14 @@ async function createNewNote(parentNoteId, noteData) {
     noteData.type = noteData.type || parentNote.type;
     noteData.mime = noteData.mime || parentNote.mime;
 
+    if (noteData.type === 'text' || noteData.type === 'code') {
+        noteData.content = noteData.content || "";
+    }
+
     const note = await new Note({
+        noteId: noteData.noteId, // optionally can force specific noteId
         title: noteData.title,
-        content: noteData.content || '',
+        content: noteData.content,
         isProtected: noteData.isProtected,
         type: noteData.type || 'text',
         mime: noteData.mime || 'text/html'
@@ -78,7 +97,7 @@ async function createNewNote(parentNoteId, noteData) {
         parentNoteId: parentNoteId,
         notePosition: newNotePos,
         prefix: noteData.prefix,
-        isExpanded: 0
+        isExpanded: !!noteData.isExpanded
     }).save();
 
     for (const attr of await parentNote.getAttributes()) {
@@ -113,10 +132,13 @@ async function createNote(parentNoteId, title, content = "", extraOptions = {}) 
         title: title,
         content: extraOptions.json ? JSON.stringify(content, null, '\t') : content,
         target: 'into',
+        noteId: extraOptions.noteId,
         isProtected: !!extraOptions.isProtected,
         type: extraOptions.type,
         mime: extraOptions.mime,
-        dateCreated: extraOptions.dateCreated
+        dateCreated: extraOptions.dateCreated,
+        isExpanded: extraOptions.isExpanded,
+        notePosition: extraOptions.notePosition
     };
 
     if (extraOptions.json && !noteData.type) {
@@ -134,8 +156,6 @@ async function createNote(parentNoteId, title, content = "", extraOptions = {}) 
             value: attr.value
         });
     }
-
-    await triggerNoteTitleChanged(note);
 
     return {note, branch};
 }
@@ -168,39 +188,97 @@ async function protectNoteRevisions(note) {
     }
 }
 
-async function saveNoteImages(note) {
-    if (note.type !== 'text') {
-        return;
-    }
-
-    const existingNoteImages = await note.getNoteImages();
-    const foundImageIds = [];
-    const re = /src="\/api\/images\/([a-zA-Z0-9]+)\//g;
+function findImageLinks(content, foundLinks) {
+    const re = /src="[^"]*\/api\/images\/([a-zA-Z0-9]+)\//g;
     let match;
 
-    while (match = re.exec(note.content)) {
-        const imageId = match[1];
-        const existingNoteImage = existingNoteImages.find(ni => ni.imageId === imageId);
+    while (match = re.exec(content)) {
+        foundLinks.push({
+            type: 'image',
+            targetNoteId: match[1]
+        });
+    }
 
-        if (!existingNoteImage) {
-            await new NoteImage({
+    // removing absolute references to server to keep it working between instances
+    return content.replace(/src="[^"]*\/api\/images\//g, 'src="/api/images/');
+}
+
+function findHyperLinks(content, foundLinks) {
+    const re = /href="[^"]*#root[a-zA-Z0-9\/]*\/([a-zA-Z0-9]+)\/?"/g;
+    let match;
+
+    while (match = re.exec(content)) {
+        foundLinks.push({
+            type: 'hyper',
+            targetNoteId: match[1]
+        });
+    }
+
+    // removing absolute references to server to keep it working between instances
+    return content.replace(/href="[^"]*#root/g, 'href="#root');
+}
+
+function findRelationMapLinks(content, foundLinks) {
+    const obj = JSON.parse(content);
+
+    for (const note of obj.notes) {
+        foundLinks.push({
+            type: 'relation-map',
+            targetNoteId: note.noteId
+        })
+    }
+}
+
+async function saveLinks(note, content) {
+    if (note.type !== 'text' && note.type !== 'relation-map') {
+        return content;
+    }
+
+    const foundLinks = [];
+
+    if (note.type === 'text') {
+        content = findImageLinks(content, foundLinks);
+        content = findHyperLinks(content, foundLinks);
+    }
+    else if (note.type === 'relation-map') {
+        findRelationMapLinks(content, foundLinks);
+    }
+    else {
+        throw new Error("Unrecognized type " + note.type);
+    }
+
+    const existingLinks = await note.getLinks();
+
+    for (const foundLink of foundLinks) {
+        const existingLink = existingLinks.find(existingLink =>
+            existingLink.targetNoteId === foundLink.targetNoteId
+            && existingLink.type === foundLink.type);
+
+        if (!existingLink) {
+            await new Link({
                 noteId: note.noteId,
-                imageId: imageId
+                targetNoteId: foundLink.targetNoteId,
+                type: foundLink.type
             }).save();
         }
-        // else we don't need to do anything
-
-        foundImageIds.push(imageId);
+        else if (existingLink.isDeleted) {
+            existingLink.isDeleted = false;
+            await existingLink.save();
+        }
+        // else the link exists so we don't need to do anything
     }
 
-    // marking note images as deleted if they are not present on the page anymore
-    const unusedNoteImages = existingNoteImages.filter(ni => !foundImageIds.includes(ni.imageId));
+    // marking links as deleted if they are not present on the page anymore
+    const unusedLinks = existingLinks.filter(existingLink => !foundLinks.some(foundLink =>
+                                    existingLink.targetNoteId === foundLink.targetNoteId
+                                    && existingLink.type === foundLink.type));
 
-    for (const unusedNoteImage of unusedNoteImages) {
-        unusedNoteImage.isDeleted = true;
-
-        await unusedNoteImage.save();
+    for (const unusedLink of unusedLinks) {
+        unusedLink.isDeleted = true;
+        await unusedLink.save();
     }
+
+    return content;
 }
 
 async function saveNoteRevision(note) {
@@ -240,14 +318,16 @@ async function updateNote(noteId, noteUpdates) {
         throw new Error(`Note ${noteId} is not available for change!`);
     }
 
-    if (note.type === 'file') {
-        // for update file, newNote doesn't contain file payloads
+    if (note.type === 'file' || note.type === 'image') {
+        // files and images are immutable, they can't be updated
         noteUpdates.content = note.content;
     }
 
     await saveNoteRevision(note);
 
     const noteTitleChanged = note.title !== noteUpdates.title;
+
+    noteUpdates.content = await saveLinks(note, noteUpdates.content);
 
     note.title = noteUpdates.title;
     note.setContent(noteUpdates.content);
@@ -257,8 +337,6 @@ async function updateNote(noteId, noteUpdates) {
     if (noteTitleChanged) {
         await triggerNoteTitleChanged(note);
     }
-
-    await saveNoteImages(note);
 
     await protectNoteRevisions(note);
 }
@@ -297,9 +375,19 @@ async function deleteNote(branch) {
             await attribute.save();
         }
 
-        for (const attribute of await note.getTargetRelations()) {
-            attribute.isDeleted = true;
-            await attribute.save();
+        for (const relation of await note.getTargetRelations()) {
+            relation.isDeleted = true;
+            await relation.save();
+        }
+
+        for (const link of await note.getLinks()) {
+            link.isDeleted = true;
+            await link.save();
+        }
+
+        for (const link of await note.getTargetLinks()) {
+            link.isDeleted = true;
+            await link.save();
         }
     }
 }
@@ -307,19 +395,12 @@ async function deleteNote(branch) {
 async function cleanupDeletedNotes() {
     const cutoffDate = new Date(new Date().getTime() - 48 * 3600 * 1000);
 
-    const notesForCleanup = await repository.getEntities("SELECT * FROM notes WHERE isDeleted = 1 AND content != '' AND dateModified <= ?", [dateUtils.dateStr(cutoffDate)]);
+    // it's better to not use repository for this because it will complain about saving protected notes
+    // out of protected session
 
-    for (const note of notesForCleanup) {
-        note.content = '';
-        await note.save();
-    }
+    await sql.execute("UPDATE notes SET content = NULL WHERE isDeleted = 1 AND content IS NOT NULL AND dateModified <= ?", [dateUtils.dateStr(cutoffDate)]);
 
-    const notesRevisionsForCleanup = await repository.getEntities("SELECT note_revisions.* FROM notes JOIN note_revisions USING(noteId) WHERE notes.isDeleted = 1 AND note_revisions.content != '' AND notes.dateModified <= ?", [dateUtils.dateStr(cutoffDate)]);
-
-    for (const noteRevision of notesRevisionsForCleanup) {
-        noteRevision.content = '';
-        await noteRevision.save();
-    }
+    await sql.execute("UPDATE note_revisions SET content = NULL WHERE note_revisions.content IS NOT NULL AND noteId IN (SELECT noteId FROM notes WHERE isDeleted = 1 AND notes.dateModified <= ?)", [dateUtils.dateStr(cutoffDate)]);
 }
 
 // first cleanup kickoff 5 minutes after startup

@@ -1,13 +1,8 @@
 import libraryLoader from "./library_loader.js";
 import noteDetailService from './note_detail.js';
-import utils from "./utils.js";
-import infoService from "./info.js";
+import treeService from './tree.js';
 
-const $noteDetailText = $('#note-detail-text');
-
-const $markdownImportDialog = $('#markdown-import-dialog');
-const $markdownImportTextarea = $('#markdown-import-textarea');
-const $markdownImportButton = $('#markdown-import-button');
+const $component = $('#note-detail-text');
 
 let textEditor = null;
 
@@ -18,7 +13,7 @@ async function show() {
         // textEditor might have been initialized during previous await so checking again
         // looks like double initialization can freeze CKEditor pretty badly
         if (!textEditor) {
-            textEditor = await BalloonEditor.create($noteDetailText[0]);
+            textEditor = await BalloonEditor.create($component[0]);
 
             onNoteChange(noteDetailService.noteChanged);
         }
@@ -26,7 +21,7 @@ async function show() {
 
     textEditor.setData(noteDetailService.getCurrentNote().content);
 
-    $noteDetailText.show();
+    $component.show();
 }
 
 function getContent() {
@@ -42,65 +37,32 @@ function getContent() {
 }
 
 function focus() {
-    $noteDetailText.focus();
+    $component.focus();
 }
 
 function getEditor() {
     return textEditor;
 }
 
-async function convertMarkdownToHtml(text) {
-    await libraryLoader.requireLibrary(libraryLoader.COMMONMARK);
-
-    const reader = new commonmark.Parser();
-    const writer = new commonmark.HtmlRenderer();
-    const parsed = reader.parse(text);
-
-    const result = writer.render(parsed);
-
-    const viewFragment = textEditor.data.processor.toView(result);
-    const modelFragment = textEditor.data.toModel(viewFragment);
-
-    textEditor.model.insertContent(modelFragment, textEditor.model.document.selection);
-
-    infoService.showMessage("Markdown content has been imported into the document.");
-}
-
-async function importMarkdownInline() {
-    if (utils.isElectron()) {
-        const {clipboard} = require('electron');
-        const text = clipboard.readText();
-
-        convertMarkdownToHtml(text);
-    }
-    else {
-        $("input[name='search-text']").focus();
-
-        glob.activeDialog = $markdownImportDialog;
-
-        $markdownImportDialog.modal();
-    }
-}
-
-async function sendMarkdownDialog() {
-    const text = $markdownImportTextarea.val();
-
-    $markdownImportDialog.modal('hide');
-
-    await convertMarkdownToHtml(text);
-
-    $markdownImportTextarea.val('');
-}
-
 function onNoteChange(func) {
     textEditor.model.document.on('change:data', func);
 }
 
-$markdownImportButton.click(sendMarkdownDialog);
+$component.on("dblclick", "img", e => {
+    const $img = $(e.target);
+    const src = $img.prop("src");
 
-$markdownImportDialog.bind('keydown', 'ctrl+return', sendMarkdownDialog);
+    const match = src.match(/\/api\/images\/([A-Za-z0-9]+)\//);
 
-window.glob.importMarkdownInline = importMarkdownInline;
+    if (match) {
+        const noteId = match[1];
+
+        treeService.activateNote(noteId);
+    }
+    else {
+        window.open(src, '_blank');
+    }
+});
 
 export default {
     show,

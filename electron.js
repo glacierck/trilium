@@ -6,12 +6,15 @@ const log = require('./src/services/log');
 const cls = require('./src/services/cls');
 const url = require("url");
 const port = require('./src/services/port');
+const appIconService = require('./src/services/app_icon');
 
 const app = electron.app;
 const globalShortcut = electron.globalShortcut;
 
 // Adds debug features like hotkeys for triggering dev tools and reload
 require('electron-debug')();
+
+appIconService.installLocalAppIcon();
 
 // Prevent window being garbage collected
 let mainWindow;
@@ -70,6 +73,8 @@ app.on('activate', () => {
 });
 
 app.on('ready', async () => {
+    app.setAppUserModelId('com.github.zadam.trilium');
+
     mainWindow = await createMainWindow();
 
     const result = globalShortcut.register('CommandOrControl+Alt+P', cls.wrap(async () => {

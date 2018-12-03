@@ -1,20 +1,21 @@
 import bundleService from "./bundle.js";
 import server from "./server.js";
 import noteDetailService from "./note_detail.js";
+import attributeService from "./attributes.js";
 
-const $noteDetailRender = $('#note-detail-render');
+const $component = $('#note-detail-render');
 const $noteDetailRenderHelp = $('#note-detail-render-help');
 const $noteDetailRenderContent = $('#note-detail-render-content');
 const $renderButton = $('#render-button');
 
 async function render() {
-    const attributes = await noteDetailService.getAttributes();
+    const attributes = await attributeService.getAttributes();
     const renderNotes = attributes.filter(attr =>
         attr.type === 'relation'
         && attr.name === 'renderNote'
         && !!attr.value);
 
-    $noteDetailRender.show();
+    $component.show();
 
     $noteDetailRenderContent.empty();
     $noteDetailRenderContent.toggle(renderNotes.length > 0);

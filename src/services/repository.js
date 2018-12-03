@@ -3,6 +3,7 @@
 const sql = require('./sql');
 const syncTableService = require('../services/sync_table');
 const eventService = require('./events');
+const cls = require('./cls');
 
 let entityConstructor;
 
@@ -73,13 +74,13 @@ async function updateEntity(entity) {
 
     const clone = Object.assign({}, entity);
 
-    // transient properties not supposed to be persisted
-    delete clone.jsonContent;
-    delete clone.isOwned;
+    // this check requires that updatePojo is not static
+    if (entity.updatePojo) {
+        await entity.updatePojo(clone);
+    }
+
+    // indicates whether entity actually changed
     delete clone.isChanged;
-    delete clone.origParentNoteId;
-    delete clone.isContentAvailable;
-    delete clone.__attributeCache;
 
     for (const key in clone) {
         // !isBuffer is for images and attachments
@@ -94,21 +95,21 @@ async function updateEntity(entity) {
         const primaryKey = entity[primaryKeyName];
 
         if (entity.isChanged && (entityName !== 'options' || entity.isSynced)) {
+
             await syncTableService.addEntitySync(entityName, primaryKey);
 
-            if (isNewEntity) {
-                await eventService.emit(eventService.ENTITY_CREATED, {
+            if (!cls.isEntityEventsDisabled()) {
+                const eventPayload = {
                     entityName,
                     entity
-                });
-            }
+                };
 
-            // it seems to be better to handle deletion with a separate event
-            if (!entity.isDeleted) {
-                await eventService.emit(eventService.ENTITY_CHANGED, {
-                    entityName,
-                    entity
-                });
+                if (isNewEntity && !entity.isDeleted) {
+                    await eventService.emit(eventService.ENTITY_CREATED, eventPayload);
+                }
+
+                // it seems to be better to handle deletion and update separately
+                await eventService.emit(entity.isDeleted ? eventService.ENTITY_DELETED : eventService.ENTITY_CHANGED, eventPayload);
             }
         }
     });

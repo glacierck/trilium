@@ -4,10 +4,13 @@ const Entity = require('./entity');
 const Attribute = require('./attribute');
 const protectedSessionService = require('../services/protected_session');
 const repository = require('../services/repository');
+const sql = require('../services/sql');
 const dateUtils = require('../services/date_utils');
 
 const LABEL = 'label';
+const LABEL_DEFINITION = 'label-definition';
 const RELATION = 'relation';
+const RELATION_DEFINITION = 'relation-definition';
 
 /**
  * This represents a Note which is a central object in the Trilium Notes project.
@@ -72,7 +75,9 @@ class Note extends Entity {
     /** @returns {boolean} true if this note is JavaScript (code or attachment) */
     isJavaScript() {
         return (this.type === "code" || this.type === "file")
-            && (this.mime.startsWith("application/javascript") || this.mime === "application/x-javascript");
+            && (this.mime.startsWith("application/javascript")
+                || this.mime === "application/x-javascript"
+                || this.mime === "text/javascript");
     }
 
     /** @returns {boolean} true if this note is HTML */
@@ -137,11 +142,27 @@ class Note extends Entity {
     }
 
     /**
+     * @param {string} [name] - label name to filter
+     * @returns {Promise<Attribute[]>} all note's label definitions, including inherited ones
+     */
+    async getLabelDefinitions(name) {
+        return (await this.getAttributes(name)).filter(attr => attr.type === LABEL_DEFINITION);
+    }
+
+    /**
      * @param {string} [name] - relation name to filter
      * @returns {Promise<Attribute[]>} all note's relations (attributes with type relation), including inherited ones
      */
     async getRelations(name) {
         return (await this.getAttributes(name)).filter(attr => attr.type === RELATION);
+    }
+
+    /**
+     * @param {string} [name] - relation name to filter
+     * @returns {Promise<Attribute[]>} all note's relation definitions including inherited ones
+     */
+    async getRelationDefinitions(name) {
+        return (await this.getAttributes(name)).filter(attr => attr.type === RELATION_DEFINITION);
     }
 
     /**
@@ -415,14 +436,32 @@ class Note extends Entity {
     }
 
     /**
-     * Finds notes with given attribute name and value. Only own attributes are considered, not inherited ones
+     * @return {Promise<string[]>} return list of all descendant noteIds of this note. Returning just noteIds because number of notes can be huge. Includes also this note's noteId
+     */
+    async getDescendantNoteIds() {
+        return await sql.getColumn(`
+            WITH RECURSIVE
+            tree(noteId) AS (
+                SELECT ?
+                UNION
+                SELECT branches.noteId FROM branches
+                    JOIN tree ON branches.parentNoteId = tree.noteId
+                    JOIN notes ON notes.noteId = branches.noteId
+                WHERE notes.isDeleted = 0
+                  AND branches.isDeleted = 0
+            )
+            SELECT noteId FROM tree`, [this.noteId]);
+    }
+
+    /**
+     * Finds descendant notes with given attribute name and value. Only own attributes are considered, not inherited ones
      *
      * @param {string} type - attribute type (label, relation, etc.)
      * @param {string} name - attribute name
      * @param {string} [value] - attribute value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithAttribute(type, name, value) {
+    async getDescendantNotesWithAttribute(type, name, value) {
         const params = [this.noteId, name];
         let valueCondition = "";
 
@@ -454,22 +493,22 @@ class Note extends Entity {
     }
 
     /**
-     * Finds notes with given label name and value. Only own labels are considered, not inherited ones
+     * Finds descendant notes with given label name and value. Only own labels are considered, not inherited ones
      *
      * @param {string} name - label name
      * @param {string} [value] - label value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithLabel(name, value) { return await this.findNotesWithAttribute(LABEL, name, value); }
+    async getDescendantNotesWithLabel(name, value) { return await this.getDescendantNotesWithAttribute(LABEL, name, value); }
 
     /**
-     * Finds notes with given relation name and value. Only own relations are considered, not inherited ones
+     * Finds descendant notes with given relation name and value. Only own relations are considered, not inherited ones
      *
      * @param {string} name - relation name
      * @param {string} [value] - relation value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithRelation(name, value) { return await this.findNotesWithAttribute(RELATION, name, value); }
+    async getDescendantNotesWithRelation(name, value) { return await this.getDescendantNotesWithAttribute(RELATION, name, value); }
 
     /**
      * Returns note revisions of this note.
@@ -481,10 +520,30 @@ class Note extends Entity {
     }
 
     /**
-     * @returns {Promise<NoteImage[]>}
+     * Get list of links coming out of this note.
+     *
+     * @returns {Promise<Link[]>}
      */
-    async getNoteImages() {
-        return await repository.getEntities("SELECT * FROM note_images WHERE noteId = ? AND isDeleted = 0", [this.noteId]);
+    async getLinks() {
+        return await repository.getEntities("SELECT * FROM links WHERE noteId = ? AND isDeleted = 0", [this.noteId]);
+    }
+
+    /**
+     * Get list of links targetting this note.
+     *
+     * @returns {Promise<Link[]>}
+     */
+    async getTargetLinks() {
+        return await repository.getEntities("SELECT * FROM links WHERE targetNoteId = ? AND isDeleted = 0", [this.noteId]);
+    }
+
+    /**
+     * Return all links from this note, including deleted ones.
+     *
+     * @returns {Promise<Link[]>}
+     */
+    async getLinksWithDeleted() {
+        return await repository.getEntities("SELECT * FROM links WHERE noteId = ?", [this.noteId]);
     }
 
     /**
@@ -549,10 +608,6 @@ class Note extends Entity {
         // we do this here because encryption needs the note ID for the IV
         this.generateIdIfNecessary();
 
-        if (this.isProtected) {
-            protectedSessionService.encryptNote(this);
-        }
-
         if (!this.isDeleted) {
             this.isDeleted = false;
         }
@@ -566,6 +621,17 @@ class Note extends Entity {
         if (this.isChanged) {
             this.dateModified = dateUtils.nowDate();
         }
+    }
+
+    // cannot be static!
+    updatePojo(pojo) {
+        if (pojo.isProtected) {
+            protectedSessionService.encryptNote(pojo);
+        }
+
+        delete pojo.jsonContent;
+        delete pojo.isContentAvailable;
+        delete pojo.__attributeCache;
     }
 }
 

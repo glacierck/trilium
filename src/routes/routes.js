@@ -66,7 +66,7 @@ function route(method, path, middleware, routeHandler, resultHandler, transactio
     router[method](path, ...middleware, async (req, res, next) => {
         try {
             const result = await cls.init(async () => {
-                cls.namespace.set('sourceId', req.headers.source_id);
+                cls.namespace.set('sourceId', req.headers['trilium-source-id']);
                 protectedSessionService.setProtectedSessionId(req);
 
                 if (transactional) {
@@ -115,6 +115,7 @@ function register(app) {
 
     apiRoute(GET, '/api/notes/:noteId', notesApiRoute.getNote);
     apiRoute(PUT, '/api/notes/:noteId', notesApiRoute.updateNote);
+    apiRoute(DELETE, '/api/notes/:noteId', notesApiRoute.deleteNote);
     apiRoute(POST, '/api/notes/:parentNoteId/children', notesApiRoute.createNote);
     apiRoute(GET, '/api/notes/:parentNoteId/children', notesApiRoute.getChildren);
     apiRoute(PUT, '/api/notes/:noteId/sort', notesApiRoute.sortNotes);
@@ -127,7 +128,7 @@ function register(app) {
     apiRoute(PUT, '/api/notes/:noteId/clone-to/:parentNoteId', cloningApiRoute.cloneNoteToParent);
     apiRoute(PUT, '/api/notes/:noteId/clone-after/:afterBranchId', cloningApiRoute.cloneNoteAfter);
 
-    route(GET, '/api/notes/:entityId/export/:format', [auth.checkApiAuthOrElectron], exportRoute.exportNote);
+    route(GET, '/api/notes/:branchId/export/:type/:format', [auth.checkApiAuthOrElectron], exportRoute.exportBranch);
     route(POST, '/api/notes/:parentNoteId/import', [auth.checkApiAuthOrElectron, uploadMiddleware], importRoute.importToBranch, apiResultHandler);
 
     route(POST, '/api/notes/:parentNoteId/upload', [auth.checkApiAuthOrElectron, uploadMiddleware],
@@ -144,7 +145,7 @@ function register(app) {
     apiRoute(GET, '/api/attributes/names', attributesRoute.getAttributeNames);
     apiRoute(GET, '/api/attributes/values/:attributeName', attributesRoute.getValuesForAttribute);
 
-    route(GET, '/api/images/:imageId/:filename', [auth.checkApiAuthOrElectron], imageRoute.returnImage);
+    route(GET, '/api/images/:noteId/:filename', [auth.checkApiAuthOrElectron], imageRoute.returnImage);
     route(POST, '/api/images', [auth.checkApiAuthOrElectron, uploadMiddleware], imageRoute.uploadImage, apiResultHandler);
 
     apiRoute(GET, '/api/recent-changes', recentChangesApiRoute.getRecentChanges);

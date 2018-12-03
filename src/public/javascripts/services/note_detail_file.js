@@ -3,13 +3,15 @@ import server from "./server.js";
 import protectedSessionHolder from "./protected_session_holder.js";
 import noteDetailService from "./note_detail.js";
 
-const $noteDetailFile = $('#note-detail-file');
+const $component = $('#note-detail-file');
 
-const $fileFileName = $("#file-filename");
-const $fileFileType = $("#file-filetype");
-const $fileFileSize = $("#file-filesize");
-const $fileDownload = $("#file-download");
-const $fileOpen = $("#file-open");
+const $fileName = $("#file-filename");
+const $fileType = $("#file-filetype");
+const $fileSize = $("#file-filesize");
+const $previewRow = $("#file-preview-row");
+const $previewContent = $("#file-preview-content");
+const $downloadButton = $("#file-download");
+const $openButton = $("#file-open");
 
 async function show() {
     const currentNote = noteDetailService.getCurrentNote();
@@ -17,16 +19,19 @@ async function show() {
     const attributes = await server.get('notes/' + currentNote.noteId + '/attributes');
     const attributeMap = utils.toObject(attributes, l => [l.name, l.value]);
 
-    $noteDetailFile.show();
+    $component.show();
 
-    $fileFileName.text(attributeMap.originalFileName);
-    $fileFileSize.text(attributeMap.fileSize + " bytes");
-    $fileFileType.text(currentNote.mime);
+    $fileName.text(attributeMap.originalFileName || "?");
+    $fileSize.text((attributeMap.fileSize || "?") + " bytes");
+    $fileType.text(currentNote.mime);
+
+    $previewRow.toggle(!!currentNote.content);
+    $previewContent.text(currentNote.content);
 }
 
-$fileDownload.click(() => utils.download(getFileUrl()));
+$downloadButton.click(() => utils.download(getFileUrl()));
 
-$fileOpen.click(() => {
+$openButton.click(() => {
     if (utils.isElectron()) {
         const open = require("open");
 

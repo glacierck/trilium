@@ -12,9 +12,18 @@ async function getNote(req) {
         return [404, "Note " + noteId + " has not been found."];
     }
 
-    if (note.type === 'file') {
-        // no need to transfer (potentially large) file payload for this request
-        note.content = null;
+    if (note.type === 'file' || note.type === 'image') {
+        if (note.type === 'file' && note.mime.startsWith('text/')) {
+            note.content = note.content.toString("UTF-8");
+
+            if (note.content.length > 10000) {
+                note.content = note.content.substr(0, 10000) + "...";
+            }
+        }
+        else {
+            // no need to transfer (potentially large) file/image payload for this request
+            note.content = null;
+        }
     }
 
     return note;
@@ -66,6 +75,16 @@ async function updateNote(req) {
     await noteService.updateNote(noteId, note);
 }
 
+async function deleteNote(req) {
+    const noteId = req.params.noteId;
+
+    const note = await repository.getNote(noteId);
+
+    for (const branch of await note.getBranches()) {
+        await noteService.deleteNote(branch);
+    }
+}
+
 async function sortNotes(req) {
     const noteId = req.params.noteId;
 
@@ -95,8 +114,12 @@ async function setNoteTypeMime(req) {
 async function getRelationMap(req) {
     const noteIds = req.body.noteIds;
     const resp = {
+        // noteId => title
         noteTitles: {},
-        relations: []
+        relations: [],
+        // relation name => inverse relation name
+        inverseRelations: {},
+        links: []
     };
 
     if (noteIds.length === 0) {
@@ -105,19 +128,36 @@ async function getRelationMap(req) {
 
     const questionMarks = noteIds.map(noteId => '?').join(',');
 
-    (await repository.getEntities(`SELECT * FROM notes WHERE isDeleted = 0 AND noteId IN (${questionMarks})`, noteIds))
-        .forEach(note => resp.noteTitles[note.noteId] = note.title);
+    const notes = await repository.getEntities(`SELECT * FROM notes WHERE isDeleted = 0 AND noteId IN (${questionMarks})`, noteIds);
 
-    // FIXME: this actually doesn't take into account inherited relations! But maybe it is better this way?
-    resp.relations = (await repository.getEntities(`SELECT * FROM attributes WHERE isDeleted = 0 AND type = 'relation' AND noteId IN (${questionMarks})`, noteIds))
-        .map(relation => { return {
-            attributeId: relation.attributeId,
-            sourceNoteId: relation.noteId,
-            targetNoteId: relation.value,
-            name: relation.name
-        }; })
-        // both sourceNoteId and targetNoteId has to be in the included notes, but source was already checked in the SQL query
-        .filter(relation => noteIds.includes(relation.targetNoteId));
+    for (const note of notes) {
+        resp.noteTitles[note.noteId] = note.title;
+
+        resp.relations = resp.relations.concat((await note.getRelations())
+            .filter(relation => noteIds.includes(relation.value))
+            .map(relation => { return {
+                attributeId: relation.attributeId,
+                sourceNoteId: relation.noteId,
+                targetNoteId: relation.value,
+                name: relation.name
+            }; }));
+
+        for (const relationDefinition of await note.getRelationDefinitions()) {
+            if (relationDefinition.value.inverseRelation) {
+                resp.inverseRelations[relationDefinition.name] = relationDefinition.value.inverseRelation;
+            }
+        }
+    }
+
+    resp.links = (await repository.getEntities(`SELECT * FROM links WHERE isDeleted = 0 AND noteId IN (${questionMarks})`, noteIds))
+        .filter(link => noteIds.includes(link.targetNoteId))
+        .map(link => {
+            return {
+                linkId: link.linkId,
+                sourceNoteId: link.noteId,
+                targetNoteId: link.targetNoteId
+            }
+        });
 
     return resp;
 }
@@ -144,6 +184,7 @@ async function changeTitle(req) {
 module.exports = {
     getNote,
     updateNote,
+    deleteNote,
     createNote,
     sortNotes,
     protectSubtree,

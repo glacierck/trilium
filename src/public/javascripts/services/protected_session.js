@@ -11,8 +11,8 @@ const $password = $("#protected-session-password");
 const $noteDetailWrapper = $("#note-detail-wrapper");
 const $protectButton = $("#protect-button");
 const $unprotectButton = $("#unprotect-button");
-const $protectedSessionOnButton = $("#protected-session-on");
-const $protectedSessionOffButton = $("#protected-session-off");
+const $enterProtectedSessionButton = $("#enter-protected-session-button");
+const $leaveProtectedSessionButton = $("#leave-protected-session-button");
 
 let protectedSessionDeferred = null;
 
@@ -40,6 +40,7 @@ function ensureProtectedSession(requireProtectedSession, modal) {
             $noteDetailWrapper.hide();
         }
 
+        $dialog.toggleClass("modalless", !modal);
         $dialog.modal();
     }
     else {
@@ -56,7 +57,7 @@ async function setupProtectedSession() {
     const response = await enterProtectedSessionOnServer(password);
 
     if (!response.success) {
-        infoService.showError("Wrong password.");
+        infoService.showError("Wrong password.", 3000);
         return;
     }
 
@@ -64,8 +65,11 @@ async function setupProtectedSession() {
 
     $dialog.modal("hide");
 
-    noteDetailService.reload();
-    treeService.reload();
+    await treeService.reload();
+
+    // it's important that tree has been already reloaded at this point
+    // since detail also uses tree cache (for children overview)
+    await noteDetailService.reload();
 
     if (protectedSessionDeferred !== null) {
         ensureDialogIsClosed($dialog, $password);
@@ -75,15 +79,15 @@ async function setupProtectedSession() {
         protectedSessionDeferred.resolve(true);
         protectedSessionDeferred = null;
 
-        $protectedSessionOnButton.addClass('active');
-        $protectedSessionOffButton.removeClass('active');
+        $enterProtectedSessionButton.hide();
+        $leaveProtectedSessionButton.show();
     }
 
     infoService.showMessage("Protected session has been started.");
 }
 
 function ensureDialogIsClosed() {
-    // this may fal if the dialog has not been previously opened
+    // this may fal if the dialog has not been previously opened (not sure if still true with Bootstrap modal)
     try {
         $dialog.modal('hide');
     }
@@ -112,11 +116,15 @@ async function protectNoteAndSendToServer() {
 
     treeService.setProtected(note.noteId, note.isProtected);
 
-    noteDetailService.setNoteBackgroundIfProtected(note);
+    noteDetailService.setNoteBackgroundIfProtected(note);console.log(note);
 }
 
 async function unprotectNoteAndSendToServer() {
-    if (!noteDetailService.getCurrentNote().isProtected) {
+    const currentNote = noteDetailService.getCurrentNote();
+
+    if (!currentNote.isProtected) {
+        infoService.showAndLogError(`Note ${currentNote.noteId} is not protected`);
+
         return;
     }
 
@@ -129,14 +137,13 @@ async function unprotectNoteAndSendToServer() {
         return;
     }
 
-    const note = noteDetailService.getCurrentNote();
-    note.isProtected = false;
+    currentNote.isProtected = false;
 
-    await noteDetailService.saveNote(note);
+    await noteDetailService.saveNote(currentNote);
 
-    treeService.setProtected(note.noteId, note.isProtected);
+    treeService.setProtected(currentNote.noteId, currentNote.isProtected);
 
-    noteDetailService.setNoteBackgroundIfProtected(note);
+    noteDetailService.setNoteBackgroundIfProtected(currentNote);
 }
 
 async function protectSubtree(noteId, protect) {
@@ -156,15 +163,24 @@ $passwordForm.submit(() => {
     return false;
 });
 
-$dialog.on("shown.bs.modal", e => $password.focus());
+// this doesn't work, event is not triggered :/
+$dialog.on("show.bs.modal", e => function() {
+    if ($(this).hasClass("modalless")) {
+        // return "stolen" focus to tree
+        treeService.getCurrentNode().setFocus();
+    }
+    else {
+        $password.focus();
+    }
+});
 
 $protectButton.click(protectNoteAndSendToServer);
 $unprotectButton.click(unprotectNoteAndSendToServer);
 
+$dialog.on("shown.bs.modal", e => $password.focus());
+
 export default {
     ensureProtectedSession,
-    protectNoteAndSendToServer,
-    unprotectNoteAndSendToServer,
     protectSubtree,
     ensureDialogIsClosed,
     enterProtectedSession,

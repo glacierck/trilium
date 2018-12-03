@@ -25,14 +25,26 @@ function registerEntrypoints() {
     $("#jump-to-note-dialog-button").click(jumpToNoteDialog.showDialog);
     utils.bindShortcut('ctrl+j', jumpToNoteDialog.showDialog);
 
-    $("#show-note-revisions-button").click(noteRevisionsDialog.showCurrentNoteRevisions);
+    $("#show-note-revisions-button").click(function() {
+        if ($(this).hasClass("disabled")) {
+            return;
+        }
 
-    $("#show-source-button").click(noteSourceDialog.showDialog);
+        noteRevisionsDialog.showCurrentNoteRevisions();
+    });
+
+    $("#show-source-button").click(function() {
+        if ($(this).hasClass("disabled")) {
+            return;
+        }
+
+        noteSourceDialog.showDialog();
+    });
 
     $("#recent-changes-button").click(recentChangesDialog.showDialog);
 
-    $("#protected-session-on").click(protectedSessionService.enterProtectedSession);
-    $("#protected-session-off").click(protectedSessionService.leaveProtectedSession);
+    $("#enter-protected-session-button").click(protectedSessionService.enterProtectedSession);
+    $("#leave-protected-session-button").click(protectedSessionService.leaveProtectedSession);
 
     $("#toggle-search-button").click(searchNotesService.toggleSearch);
     utils.bindShortcut('ctrl+s', searchNotesService.toggleSearch);
@@ -56,9 +68,11 @@ function registerEntrypoints() {
     utils.bindShortcut('alt+m', e => {
         $(".hide-toggle").toggle();
 
+        const $container = $("#container");
         // when hiding switch display to block, otherwise grid still tries to display columns which shows
         // left empty column
-        $("#container").css("display", $("#container").css("display") === "grid" ? "block" : "grid");
+        $container.css("display", $container.css("display") === "grid" ? "block" : "grid");
+        $container.toggleClass("distraction-free-mode");
     });
 
     // hide (toggle) everything except for the note content for distraction free writing
@@ -83,10 +97,17 @@ function registerEntrypoints() {
 
     $(document).bind('keydown', 'ctrl+f', () => {
         if (utils.isElectron()) {
-            const searchInPage = require('electron-in-page-search').default;
-            const remote = require('electron').remote;
+            const $searchWindowWebview = $(".electron-in-page-search-window");
+            $searchWindowWebview.show();
 
-            const inPageSearch = searchInPage(remote.getCurrentWebContents());
+            const searchInPage = require('electron-in-page-search').default;
+            const {remote} = require('electron');
+
+            const inPageSearch = searchInPage(remote.getCurrentWebContents(), {
+                searchWindowWebview: $searchWindowWebview[0],
+                //openDevToolsOfSearchWindow: true,
+                customCssPath: '/libraries/electron-in-page-search/default-style.css'
+            });
 
             inPageSearch.openSearchWindow();
 
