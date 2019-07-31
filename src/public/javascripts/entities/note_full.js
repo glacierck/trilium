@@ -10,13 +10,17 @@ class NoteFull extends NoteShort {
         /** @param {string} */
         this.content = row.content;
 
-        if (this.content !== "" && this.isJson()) {
-            try {
-                /** @param {object} */
-                this.jsonContent = JSON.parse(this.content);
-            }
-            catch(e) {}
-        }
+        /** @param {string} */
+        this.dateCreated = row.dateCreated;
+
+        /** @param {string} */
+        this.dateModified = row.dateModified;
+
+        /** @param {string} */
+        this.utcDateCreated = row.utcDateCreated;
+
+        /** @param {string} */
+        this.utcDateModified = row.utcDateModified;
     }
 }
 

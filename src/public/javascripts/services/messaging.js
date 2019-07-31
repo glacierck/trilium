@@ -38,7 +38,7 @@ function handleMessage(event) {
     }
 
     if (message.type === 'sync') {
-        lastPingTs = new Date().getTime();
+        lastPingTs = Date.now();
 
         if (message.data.length > 0) {
             console.debug(utils.now(), "Sync data: ", message.data);
@@ -67,12 +67,9 @@ function connectWebSocket() {
 
     // use wss for secure messaging
     const ws = new WebSocket(protocol + "://" + location.host);
-    ws.onopen = event => console.debug(utils.now(), "Connected to server with WebSocket");
+    ws.onopen = () => console.debug(utils.now(), "Connected to server with WebSocket");
     ws.onmessage = handleMessage;
-    ws.onclose = function(){
-        // Try to reconnect in 5 seconds
-        setTimeout(() => connectWebSocket(), 5000);
-    };
+    // we're not handling ws.onclose here because reconnection is done in sendPing()
 
     return ws;
 }
@@ -81,17 +78,24 @@ setTimeout(() => {
     ws = connectWebSocket();
 
     lastSyncId = glob.maxSyncIdAtLoad;
-    lastPingTs = new Date().getTime();
+    lastPingTs = Date.now();
 
     setInterval(async () => {
-        if (new Date().getTime() - lastPingTs > 30000) {
+        if (Date.now() - lastPingTs > 30000) {
             console.log("Lost connection to server");
         }
 
-        ws.send(JSON.stringify({
-            type: 'ping',
-            lastSyncId: lastSyncId
-        }));
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'ping',
+                lastSyncId: lastSyncId
+            }));
+        }
+        else if (ws.readyState === ws.CLOSED || ws.readyState === ws.CLOSING) {
+            console.log("WS closed or closing, trying to reconnect");
+
+            ws = connectWebSocket();
+        }
     }, 1000);
 }, 0);
 

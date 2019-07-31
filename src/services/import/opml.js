@@ -2,8 +2,15 @@
 
 const noteService = require('../../services/notes');
 const parseString = require('xml2js').parseString;
+const protectedSessionService = require('../protected_session');
 
-async function importOpml(fileBuffer, parentNote) {
+/**
+ * @param {ImportContext} importContext
+ * @param {Buffer} fileBuffer
+ * @param {Note} parentNote
+ * @return {Promise<*[]|*>}
+ */
+async function importOpml(importContext, fileBuffer, parentNote) {
     const xml = await new Promise(function(resolve, reject)
     {
         parseString(fileBuffer, function (err, result) {
@@ -16,8 +23,38 @@ async function importOpml(fileBuffer, parentNote) {
         });
     });
 
-    if (xml.opml.$.version !== '1.0' && xml.opml.$.version !== '1.1') {
-        return [400, 'Unsupported OPML version ' + xml.opml.$.version + ', 1.0 or 1.1 expected instead.'];
+    if (!['1.0', '1.1', '2.0'].includes(xml.opml.$.version)) {
+        return [400, 'Unsupported OPML version ' + xml.opml.$.version + ', 1.0, 1.1 or 2.0 expected instead.'];
+    }
+
+    const opmlVersion = parseInt(xml.opml.$.version);
+
+    async function importOutline(outline, parentNoteId) {
+        let title, content;
+
+        if (opmlVersion === 1) {
+            title = outline.$.title;
+            content = toHtml(outline.$.text);
+        }
+        else if (opmlVersion === 2) {
+            title = outline.$.text;
+            content = outline.$._note; // _note is already HTML
+        }
+        else {
+            throw new Error("Unrecognized OPML version " + opmlVersion);
+        }
+
+        const {note} = await noteService.createNote(parentNoteId, title, content, {
+            isProtected: parentNote.isProtected && protectedSessionService.isProtectedSessionAvailable(),
+        });
+
+        importContext.increaseProgressCount();
+
+        for (const childOutline of (outline.outline || [])) {
+            await importOutline(childOutline, note.noteId);
+        }
+
+        return note;
     }
 
     const outlines = xml.opml.body[0].outline || [];
@@ -39,16 +76,6 @@ function toHtml(text) {
     }
 
     return '<p>' + text.replace(/(?:\r\n|\r|\n)/g, '</p><p>') + '</p>';
-}
-
-async function importOutline(outline, parentNoteId) {
-    const {note} = await noteService.createNote(parentNoteId, outline.$.title, toHtml(outline.$.text));
-
-    for (const childOutline of (outline.outline || [])) {
-        await importOutline(childOutline, note.noteId);
-    }
-
-    return note;
 }
 
 module.exports = {

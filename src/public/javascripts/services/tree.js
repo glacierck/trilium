@@ -1,7 +1,5 @@
 import contextMenuWidget from './context_menu.js';
-import treeContextMenuService from './tree_context_menu.js';
 import dragAndDropSetup from './drag_and_drop.js';
-import linkService from './link.js';
 import messagingService from './messaging.js';
 import noteDetailService from './note_detail.js';
 import protectedSessionHolder from './protected_session_holder.js';
@@ -14,15 +12,19 @@ import treeBuilder from "./tree_builder.js";
 import treeKeyBindings from "./tree_keybindings.js";
 import Branch from '../entities/branch.js';
 import NoteShort from '../entities/note_short.js';
+import hoistedNoteService from '../services/hoisted_note.js';
+import confirmDialog from "../dialogs/confirm.js";
+import optionsInit from "../services/options_init.js";
+import TreeContextMenu from "./tree_context_menu.js";
+import bundle from "./bundle.js";
 
 const $tree = $("#tree");
 const $createTopLevelNoteButton = $("#create-top-level-note-button");
 const $collapseTreeButton = $("#collapse-tree-button");
-const $scrollToCurrentNoteButton = $("#scroll-to-current-note-button");
-const $notePathList = $("#note-path-list");
-const $notePathCount = $("#note-path-count");
+const $scrollToActiveNoteButton = $("#scroll-to-active-note-button");
 
-let startNotePath = null;
+let setFrontendAsLoaded;
+const frontendLoaded = new Promise(resolve => { setFrontendAsLoaded = resolve; });
 
 // focused & not active node can happen during multiselection where the node is selected but not activated
 // (its content is not displayed in the detail)
@@ -33,14 +35,8 @@ function getFocusedNode() {
 }
 
 // note that if you want to access data like noteId or isProtected, you need to go into "data" property
-function getCurrentNode() {
+function getActiveNode() {
     return $tree.fancytree("getActiveNode");
-}
-
-function getCurrentNotePath() {
-    const node = getCurrentNode();
-
-    return treeUtils.getNotePath(node);
 }
 
 async function getNodesByBranchId(branchId) {
@@ -82,43 +78,96 @@ async function setNodeTitleWithPrefix(node) {
 }
 
 async function expandToNote(notePath, expandOpts) {
-    utils.assertArguments(notePath);
-
-    const runPath = await getRunPath(notePath);
-
-    const noteId = treeUtils.getNoteIdFromNotePath(notePath);
-
-    let parentNoteId = 'none';
-
-    for (const childNoteId of runPath) {
-        const node = getNodesByNoteId(childNoteId).find(node => node.data.parentNoteId === parentNoteId);
-
-        if (!node) {
-            console.error(`Can't find node for noteId=${childNoteId} with parentNoteId=${parentNoteId}`);
-        }
-
-        if (childNoteId === noteId) {
-            return node;
-        }
-        else {
-            await node.setExpanded(true, expandOpts);
-        }
-
-        parentNoteId = childNoteId;
-    }
+    return await getNodeFromPath(notePath, true, expandOpts);
 }
 
-async function activateNote(notePath, newNote) {
+function findChildNode(parentNode, childNoteId) {
+    let foundChildNode = null;
+
+    for (const childNode of parentNode.getChildren()) {
+        if (childNode.data.noteId === childNoteId) {
+            foundChildNode = childNode;
+            break;
+        }
+    }
+    return foundChildNode;
+}
+
+async function getNodeFromPath(notePath, expand = false, expandOpts = {}) {
     utils.assertArguments(notePath);
 
-    if (glob.activeDialog) {
-        glob.activeDialog.modal('hide');
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
+    let parentNode = null;
+
+    for (const childNoteId of await getRunPath(notePath)) {
+        if (childNoteId === hoistedNoteId) {
+            // there must be exactly one node with given hoistedNoteId
+            parentNode = getNodesByNoteId(childNoteId)[0];
+
+            continue;
+        }
+
+        // we expand only after hoisted note since before then nodes are not actually present in the tree
+        if (parentNode) {
+            checkFolderStatus(parentNode);
+
+            if (!parentNode.isLoaded()) {
+                await parentNode.load();
+            }
+
+            if (expand) {
+               parentNode.setExpanded(true, expandOpts);
+            }
+
+            let foundChildNode = findChildNode(parentNode, childNoteId);
+
+            if (!foundChildNode) { // note might be recently created so we'll force reload and try again
+                await parentNode.load(true);
+
+                foundChildNode = findChildNode(parentNode, childNoteId);
+
+                if (!foundChildNode) {
+                    messagingService.logError(`Can't find node for child node of noteId=${childNoteId} for parent of noteId=${parentNode.data.noteId} and hoistedNoteId=${hoistedNoteId}, requested path is ${notePath}`);
+                    return;
+                }
+            }
+
+            parentNode = foundChildNode;
+        }
     }
+
+    return parentNode;
+}
+
+async function activateNote(notePath, noteLoadedListener) {
+    utils.assertArguments(notePath);
+
+    // notePath argument can contain only noteId which is not good when hoisted since
+    // then we need to check the whole note path
+    const runNotePath = await getRunPath(notePath);
+
+    if (!runNotePath) {
+        console.log("Cannot activate " + notePath);
+        return;
+    }
+
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
+
+    if (hoistedNoteId !== 'root' && !runNotePath.includes(hoistedNoteId)) {
+        if (!await confirmDialog.confirm("Requested note is outside of hoisted note subtree. Do you want to unhoist?")) {
+            return;
+        }
+
+        // unhoist so we can activate the note
+        await hoistedNoteService.unhoist();
+    }
+
+    utils.closeActiveDialog();
 
     const node = await expandToNote(notePath);
 
-    if (newNote) {
-        noteDetailService.newNoteCreated();
+    if (noteLoadedListener) {
+        noteDetailService.addDetailLoadedListener(node.data.noteId, noteLoadedListener);
     }
 
     // we use noFocus because when we reload the tree because of background changes
@@ -131,17 +180,35 @@ async function activateNote(notePath, newNote) {
 }
 
 /**
+ * Accepts notePath which might or might not be valid and returns an existing path as close to the original
+ * notePath as possible.
+ */
+async function resolveNotePath(notePath) {
+    const runPath = await getRunPath(notePath);
+
+    return runPath ? runPath.join("/") : null;
+}
+
+/**
  * Accepts notePath and tries to resolve it. Part of the path might not be valid because of note moving (which causes
  * path change) or other corruption, in that case this will try to get some other valid path to the correct note.
  */
 async function getRunPath(notePath) {
     utils.assertArguments(notePath);
 
+    notePath = notePath.split("-")[0].trim();
+
+    if (notePath.length === 0) {
+        return;
+    }
+
     const path = notePath.split("/").reverse();
 
     if (!path.includes("root")) {
         path.push('root');
     }
+
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
 
     const effectivePath = [];
     let childNoteId = null;
@@ -158,7 +225,8 @@ async function getRunPath(notePath) {
             const child = await treeCache.getNote(childNoteId);
 
             if (!child) {
-                console.log("Can't find " + childNoteId);
+                console.log("Can't find note " + childNoteId);
+                return;
             }
 
             const parents = await child.getParentNotes();
@@ -195,64 +263,15 @@ async function getRunPath(notePath) {
             }
         }
 
-        if (parentNoteId === 'none') {
+        effectivePath.push(parentNoteId);
+        childNoteId = parentNoteId;
+
+        if (parentNoteId === hoistedNoteId) {
             break;
-        }
-        else {
-            effectivePath.push(parentNoteId);
-            childNoteId = parentNoteId;
         }
     }
 
     return effectivePath.reverse();
-}
-
-async function addPath(notePath, isCurrent) {
-    const title = await treeUtils.getNotePathTitle(notePath);
-
-    const noteLink = await linkService.createNoteLink(notePath, title);
-
-    noteLink
-        .addClass("no-tooltip-preview")
-        .addClass("dropdown-item");
-
-    if (isCurrent) {
-        noteLink.addClass("current");
-    }
-
-    $notePathList.append(noteLink);
-}
-
-async function showPaths(noteId, node) {
-    utils.assertArguments(noteId, node);
-
-    const note = await treeCache.getNote(noteId);
-
-    if (note.noteId === 'root') {
-        // root doesn't have any parent, but it's still technically 1 path
-
-        $notePathCount.html("1 path");
-
-        $notePathList.empty();
-
-        await addPath('root', true);
-    }
-    else {
-        const parents = await note.getParentNotes();
-
-        $notePathCount.html(parents.length + " path" + (parents.length > 1 ? "s" : ""));
-
-        $notePathList.empty();
-
-        for (const parentNote of parents) {
-            const parentNotePath = await getSomeNotePath(parentNote);
-            // this is to avoid having root notes leading '/'
-            const notePath = parentNotePath ? (parentNotePath + '/' + noteId) : noteId;
-            const isCurrent = node.getParent().data.noteId === parentNote.noteId;
-
-            await addPath(notePath, isCurrent);
-        }
-    }
 }
 
 async function getSomeNotePath(note) {
@@ -268,7 +287,8 @@ async function getSomeNotePath(note) {
         const parents = await cur.getParentNotes();
 
         if (!parents.length) {
-            infoService.throwError("Can't find parents for " + cur);
+            infoService.throwError(`Can't find parents for note ${cur.noteId}`);
+            return;
         }
 
         cur = parents[0];
@@ -285,57 +305,107 @@ async function setExpandedToServer(branchId, isExpanded) {
     await server.put('branches/' + branchId + '/expanded/' + expandedNum);
 }
 
-function addRecentNote(branchId, notePath) {
-    setTimeout(async () => {
-        // we include the note into recent list only if the user stayed on the note at least 5 seconds
-        if (notePath && notePath === getCurrentNotePath()) {
-            await server.put('recent-notes/' + branchId + '/' + encodeURIComponent(notePath));
-        }
-    }, 1500);
-}
-
-function setCurrentNotePathToHash(node) {
-    utils.assertArguments(node);
-
-    const currentNotePath = treeUtils.getNotePath(node);
-    const currentBranchId = node.data.branchId;
-
-    document.location.hash = currentNotePath;
-
-    addRecentNote(currentBranchId, currentNotePath);
-}
-
 function getSelectedNodes(stopOnParents = false) {
     return getTree().getSelectedNodes(stopOnParents);
+}
+
+function getSelectedOrActiveNodes(node) {
+    let notes = getSelectedNodes(true);
+
+    if (notes.length === 0) {
+        notes.push(node);
+    }
+    return notes;
 }
 
 function clearSelectedNodes() {
     for (const selectedNode of getSelectedNodes()) {
         selectedNode.setSelected(false);
     }
-
-    const currentNode = getCurrentNode();
-
-    if (currentNode) {
-        currentNode.setSelected(true);
-    }
 }
 
 async function treeInitialized() {
-    const noteId = treeUtils.getNoteIdFromNotePath(startNotePath);
-
-    if (!await treeCache.getNote(noteId)) {
-        // note doesn't exist so don't try to activate it
-        startNotePath = null;
+    if (noteDetailService.getTabContexts().length > 0) {
+        // this is just tree reload - tabs are already in place
+        return;
     }
 
-    if (startNotePath) {
-        const node = await activateNote(startNotePath);
+    let openTabs = [];
 
-        // looks like this this doesn't work when triggered immediatelly after activating node
-        // so waiting a second helps
-        setTimeout(() => node.makeVisible({scrollIntoView: true}), 1000);
+    try {
+        const options = await optionsInit.optionsReady;
+
+        openTabs = JSON.parse(options.openTabs);
     }
+    catch (e) {
+        messagingService.logError("Cannot retrieve open tabs: " + e.stack);
+    }
+
+    // if there's notePath in the URL, make sure it's open and active
+    // (useful, among others, for opening clipped notes from clipper)
+    if (location.hash) {
+        const notePath = location.hash.substr(1);
+        const noteId = treeUtils.getNoteIdFromNotePath(notePath);
+
+        if (await treeCache.noteExists(noteId)) {
+            for (const tab of openTabs) {
+                tab.active = false;
+            }
+
+            const foundTab = openTabs.find(tab => noteId === treeUtils.getNoteIdFromNotePath(tab.notePath));
+
+            if (foundTab) {
+                foundTab.active = true;
+            }
+            else {
+                openTabs.push({
+                    notePath: notePath,
+                    active: true
+                });
+            }
+        }
+    }
+
+    let filteredTabs = [];
+
+    for (const openTab of openTabs) {
+        const noteId = treeUtils.getNoteIdFromNotePath(openTab.notePath);
+
+        if (await treeCache.noteExists(noteId)) {
+            // note doesn't exist so don't try to open tab for it
+            filteredTabs.push(openTab);
+        }
+    }
+
+    if (utils.isMobile()) {
+        // mobile frontend doesn't have tabs so show only the active tab
+        filteredTabs = filteredTabs.filter(tab => tab.active);
+    }
+
+    if (filteredTabs.length === 0) {
+        filteredTabs.push({
+            notePath: 'root',
+            active: true
+        });
+    }
+
+    if (!filteredTabs.find(tab => tab.active)) {
+        filteredTabs[0].active = true;
+    }
+
+    for (const tab of filteredTabs) {
+        await noteDetailService.loadNoteDetail(tab.notePath, {
+            tabId: tab.tabId,
+            newTab: true,
+            activate: tab.active
+        });
+    }
+
+    // previous opening triggered task to save tab changes but these are bogus changes (this is init)
+    // so we'll cancel it
+    noteDetailService.clearOpenTabsTask();
+
+    setFrontendAsLoaded();
 }
 
 function initFancyTree(tree) {
@@ -344,7 +414,7 @@ function initFancyTree(tree) {
     $tree.fancytree({
         autoScroll: true,
         keyboard: false, // we takover keyboard handling in the hotkeys plugin
-        extensions: ["hotkeys", "filter", "dnd5", "clones"],
+        extensions: ["hotkeys", "dnd5", "clones"],
         source: tree,
         scrollParent: $tree,
         minExpandLevel: 2, // root can't be collapsed
@@ -353,46 +423,35 @@ function initFancyTree(tree) {
             const node = data.node;
 
             if (targetType === 'title' || targetType === 'icon') {
-                if (!event.ctrlKey) {
-                    node.setActive();
-                    node.setSelected(true);
-
-                    clearSelectedNodes();
+                if (event.shiftKey) {
+                    node.setSelected(!node.isSelected());
+                    node.setFocus(true);
+                }
+                else if (event.ctrlKey) {
+                    noteDetailService.loadNoteDetail(node.data.noteId, { newTab: true });
                 }
                 else {
-                    node.setSelected(!node.isSelected());
+                    node.setActive();
+
+                    clearSelectedNodes();
                 }
 
                 return false;
             }
         },
-        activate: (event, data) => {
-            const node = data.node;
-            const noteId = node.data.noteId;
+        activate: async (event, data) => {
+            // click event won't propagate so let's close context menu manually
+            contextMenuWidget.hideContextMenu();
 
-            setCurrentNotePathToHash(node);
+            const notePath = await treeUtils.getNotePath(data.node);
 
-            noteDetailService.switchToNote(noteId);
-
-            showPaths(noteId, node);
+            noteDetailService.switchToNote(notePath);
         },
         expand: (event, data) => setExpandedToServer(data.node.data.branchId, true),
         collapse: (event, data) => setExpandedToServer(data.node.data.branchId, false),
         init: (event, data) => treeInitialized(), // don't collapse to short form
         hotkeys: {
             keydown: treeKeyBindings
-        },
-        filter: {
-            autoApply: true,   // Re-apply last filter if lazy data is loaded
-            autoExpand: true, // Expand all branches that contain matches while filtered
-            counter: false,     // Show a badge with number of matching child nodes near parent icons
-            fuzzy: false,      // Match single characters in order, e.g. 'fb' will match 'FooBar'
-            hideExpandedCounter: true,  // Hide counter badge if parent is expanded
-            hideExpanders: false,       // Hide expanders if all child nodes are hidden by filter
-            highlight: true,   // Highlight matches by wrapping inside <mark> tags
-            leavesOnly: false, // Match end nodes only
-            nodata: true,      // Display a 'no data' status node if result is empty
-            mode: "hide"       // Grayout unmatched nodes (pass "hide" to remove unmatched node instead)
         },
         dnd5: dragAndDropSetup,
         lazyLoad: function(event, data) {
@@ -402,13 +461,44 @@ function initFancyTree(tree) {
         },
         clones: {
             highlightActiveClones: true
+        },
+        enhanceTitle: async function (event, data) {
+            const node = data.node;
+            const $span = $(node.span);
+
+            if (node.data.noteId !== 'root'
+                && node.data.noteId === await hoistedNoteService.getHoistedNoteId()
+                && $span.find('.unhoist-button').length === 0) {
+
+                const unhoistButton = $('<span>&nbsp; (<a class="unhoist-button">unhoist</a>)</span>');
+
+                $span.append(unhoistButton);
+            }
+
+            const note = await treeCache.getNote(node.data.noteId);
+
+            if (note.type === 'search' && $span.find('.refresh-search-button').length === 0) {
+                const refreshSearchButton = $('<span>&nbsp; <span class="refresh-search-button jam jam-refresh" title="Refresh saved search results"></span></span>');
+
+                $span.append(refreshSearchButton);
+            }
+        },
+        // this is done to automatically lazy load all expanded search notes after tree load
+        loadChildren: (event, data) => {
+            data.node.visit((subNode) => {
+                // Load all lazy/unloaded child nodes
+                // (which will trigger `loadChildren` recursively)
+                if (subNode.isUndefined() && subNode.isExpanded()) {
+                    subNode.load();
+                }
+            });
         }
     });
 
     $tree.on('contextmenu', '.fancytree-node', function(e) {
-        treeContextMenuService.getContextMenuItems(e).then(contextMenuItems => {
-            contextMenuWidget.initContextMenu(e, contextMenuItems, treeContextMenuService.selectContextMenuItem);
-        });
+        const node = $.ui.fancytree.getNode(e);
+
+        contextMenuWidget.initContextMenu(e, new TreeContextMenu(node));
 
         return false; // blocks default browser right click menu
     });
@@ -421,28 +511,49 @@ function getTree() {
 async function reload() {
     const notes = await loadTree();
 
-    // this will also reload the note content
+    const activeNotePath = getActiveNode() !== null ? await treeUtils.getNotePath(getActiveNode()) : null;
+
     await getTree().reload(notes);
+
+    // reactivate originally activated node, but don't trigger note loading
+    if (activeNotePath) {
+        const node = await getNodeFromPath(activeNotePath, true);
+
+        await node.setActive(true, {noEvents: true});
+    }
 }
 
-function getNotePathFromAddress() {
-    return document.location.hash.substr(1); // strip initial #
+function isNotePathInAddress() {
+    const [notePath, tabId] = getHashValueFromAddress();
+
+    return notePath.startsWith("root")
+        // empty string is for empty/uninitialized tab
+        || (notePath === '' && !!tabId);
+}
+
+function getHashValueFromAddress() {
+    const str = document.location.hash ? document.location.hash.substr(1) : ""; // strip initial #
+
+    return str.split("-");
+}
+
+async function loadTreeCache() {
+    const resp = await server.get('tree');
+
+    treeCache.load(resp.notes, resp.branches, resp.relations);
 }
 
 async function loadTree() {
-    const resp = await server.get('tree');
-    startNotePath = resp.startNotePath;
+    await loadTreeCache();
 
-    if (document.location.hash) {
-        startNotePath = getNotePathFromAddress();
-    }
-
-    return await treeBuilder.prepareTree(resp.notes, resp.branches, resp.relations);
+    return await treeBuilder.prepareTree();
 }
 
-function collapseTree(node = null) {
+async function collapseTree(node = null) {
     if (!node) {
-        node = $tree.fancytree("getRootNode");
+        const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
+
+        node = getNodesByNoteId(hoistedNoteId)[0];
     }
 
     node.setExpanded(false);
@@ -450,13 +561,20 @@ function collapseTree(node = null) {
     node.visit(node => node.setExpanded(false));
 }
 
-function scrollToCurrentNote() {
-    const node = getCurrentNode();
+function focusTree() {
+    $tree.find('.fancytree-container').focus();
+}
 
-    if (node) {
+async function scrollToActiveNote() {
+    const activeContext = noteDetailService.getActiveTabContext();
+
+    if (activeContext && activeContext.notePath) {
+        focusTree();
+
+        const node = await expandToNote(activeContext.notePath);
+
         node.makeVisible({scrollIntoView: true});
-
-        node.setFocus();
+        node.setFocus(true);
     }
 }
 
@@ -483,69 +601,73 @@ async function setNoteTitle(noteId, title) {
 }
 
 async function createNewTopLevelNote() {
-    const rootNode = getNodesByNoteId('root')[0];
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
 
-    await createNote(rootNode, "root", "into", false);
+    const rootNode = getNodesByNoteId(hoistedNoteId)[0];
+
+    await createNote(rootNode, hoistedNoteId, "into");
 }
 
-async function createNote(node, parentNoteId, target, isProtected, saveSelection = false) {
+async function createNote(node, parentNoteId, target, extraOptions = {}) {
     utils.assertArguments(node, parentNoteId, target);
 
     // if isProtected isn't available (user didn't enter password yet), then note is created as unencrypted
     // but this is quite weird since user doesn't see WHERE the note is being created so it shouldn't occur often
-    if (!isProtected || !protectedSessionHolder.isProtectedSessionAvailable()) {
-        isProtected = false;
+    if (!extraOptions.isProtected || !protectedSessionHolder.isProtectedSessionAvailable()) {
+        extraOptions.isProtected = false;
     }
 
-    if (noteDetailService.getCurrentNoteType() !== 'text') {
-        saveSelection = false;
+    if (noteDetailService.getActiveNoteType() !== 'text') {
+        extraOptions.saveSelection = false;
     }
     else {
         // just disable this feature altogether - there's a problem that note containing image or table at the beginning
         // of the content will be auto-selected by CKEditor and then CTRL-P with no user interaction will automatically save
         // the selection - see https://github.com/ckeditor/ckeditor5/issues/1384
-        saveSelection = false;
+        extraOptions.saveSelection = false;
     }
 
-    let title, content;
-
-    if (saveSelection) {
-        [title, content] = parseSelectedHtml(window.cutToNote.getSelectedHtml());
+    if (extraOptions.saveSelection) {
+        [extraOptions.title, extraOptions.content] = parseSelectedHtml(window.cutToNote.getSelectedHtml());
     }
 
-    const newNoteName = title || "new note";
+    const newNoteName = extraOptions.title || "new note";
 
     const {note, branch} = await server.post('notes/' + parentNoteId + '/children', {
         title: newNoteName,
-        content: content,
+        content: extraOptions.content,
         target: target,
         target_branchId: node.data.branchId,
-        isProtected: isProtected
+        isProtected: extraOptions.isProtected,
+        type: extraOptions.type
     });
 
-    if (saveSelection) {
+    if (extraOptions.saveSelection) {
         // we remove the selection only after it was saved to server to make sure we don't lose anything
         window.cutToNote.removeSelection();
     }
 
-    await noteDetailService.saveNoteIfChanged();
+    await noteDetailService.saveNotesIfChanged();
 
-    noteDetailService.newNoteCreated();
+    noteDetailService.addDetailLoadedListener(note.noteId, noteDetailService.focusAndSelectTitle);
 
     const noteEntity = new NoteShort(treeCache, note);
     const branchEntity = new Branch(treeCache, branch);
 
     treeCache.add(noteEntity, branchEntity);
 
-    const newNode = {
+    let newNode = {
         title: newNoteName,
         noteId: branchEntity.noteId,
         parentNoteId: parentNoteId,
         refKey: branchEntity.noteId,
         branchId: branchEntity.branchId,
-        isProtected: isProtected,
+        isProtected: extraOptions.isProtected,
         extraClasses: await treeBuilder.getExtraClasses(noteEntity),
-        icon: treeBuilder.getIcon(noteEntity)
+        icon: await treeBuilder.getIcon(noteEntity),
+        folder: extraOptions.type === 'search',
+        lazy: true,
+        key: utils.randomString(12) // this should prevent some "duplicate key" errors
     };
 
     if (target === 'after') {
@@ -553,6 +675,9 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
     }
     else if (target === 'into') {
         if (!node.getChildren() && node.isFolder()) {
+            // folder is not loaded - load will bring up the note since it was already put into cache
+            await node.load(true);
+
             await node.setExpanded();
         }
         else {
@@ -561,7 +686,10 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
 
         await node.getLastChild().setActive(true);
 
+        const parentNoteEntity = await treeCache.getNote(node.data.noteId);
+
         node.folder = true;
+        node.icon = await treeBuilder.getIcon(parentNoteEntity); // icon might change into folder
         node.renderTitle();
     }
     else {
@@ -569,6 +697,21 @@ async function createNote(node, parentNoteId, target, isProtected, saveSelection
     }
 
     clearSelectedNodes(); // to unmark previously active node
+
+    // need to refresh because original doesn't have methods like .getParent()
+    newNode = getNodesByNoteId(branchEntity.noteId)[0];
+
+    // following for cycle will make sure that also clones of a parent are refreshed
+    for (const newParentNode of getNodesByNoteId(parentNoteId)) {
+        if (newParentNode.key === newNode.getParent().key) {
+            // we've added a note into this one so no need to refresh
+            continue;
+        }
+
+        await newParentNode.load(true); // force reload to show up new note
+
+        await checkFolderStatus(newParentNode);
+    }
 
     return {note, branch};
 }
@@ -605,6 +748,15 @@ messagingService.subscribeToMessages(message => {
    if (message.type === 'refresh-tree') {
        reload();
    }
+   else if (message.type === 'open-note') {
+       noteDetailService.activateOrOpenNote(message.noteId);
+
+       if (utils.isElectron()) {
+           const currentWindow = require("electron").remote.getCurrentWindow();
+
+           currentWindow.show();
+       }
+   }
 });
 
 messagingService.subscribeToSyncMessages(syncData => {
@@ -617,33 +769,79 @@ messagingService.subscribeToSyncMessages(syncData => {
     }
 });
 
-utils.bindShortcut('ctrl+o', () => {
-    const node = getCurrentNode();
+utils.bindShortcut('ctrl+o', async () => {
+    const node = getActiveNode();
     const parentNoteId = node.data.parentNoteId;
-    const isProtected = treeUtils.getParentProtectedStatus(node);
+    const isProtected = await treeUtils.getParentProtectedStatus(node);
 
-    createNote(node, parentNoteId, 'after', isProtected, true);
+    if (node.data.noteId === 'root' || node.data.noteId === await hoistedNoteService.getHoistedNoteId()) {
+        return;
+    }
+
+    await createNote(node, parentNoteId, 'after', {
+        isProtected: isProtected,
+        saveSelection: true
+    });
 });
 
-function createNoteInto() {
-    const node = getCurrentNode();
+async function createNoteInto() {
+    const node = getActiveNode();
 
-    createNote(node, node.data.noteId, 'into', node.data.isProtected, true);
+    if (node) {
+        await createNote(node, node.data.noteId, 'into', {
+            isProtected: node.data.isProtected,
+            saveSelection: true
+        });
+    }
+}
+
+async function checkFolderStatus(node) {
+    const note = await treeCache.getNote(node.data.noteId);
+
+    node.folder = note.type === 'search' || note.getChildNoteIds().length > 0;
+    node.icon = await treeBuilder.getIcon(note);
+    node.renderTitle();
+}
+
+async function reloadNote(noteId) {
+    await treeCache.reloadChildren(noteId);
+
+    for (const node of getNodesByNoteId(noteId)) {
+        await node.load(true);
+
+        await checkFolderStatus(node);
+    }
 }
 
 window.glob.createNoteInto = createNoteInto;
 
 utils.bindShortcut('ctrl+p', createNoteInto);
 
-utils.bindShortcut('ctrl+.', scrollToCurrentNote);
+utils.bindShortcut('ctrl+.', scrollToActiveNote);
 
-$(window).bind('hashchange', function() {
-    const notePath = getNotePathFromAddress();
+$(window).bind('hashchange', async function() {
+    if (isNotePathInAddress()) {
+        const [notePath, tabId] = getHashValueFromAddress();
 
-    if (getCurrentNotePath() !== notePath) {
-        console.debug("Switching to " + notePath + " because of hash change");
+        console.debug(`Switching to ${notePath} on tab ${tabId} because of hash change`);
 
-        activateNote(notePath);
+        noteDetailService.switchToTab(tabId, notePath);
+    }
+});
+
+// fancytree doesn't support middle click so this is a way to support it
+$tree.on('mousedown', '.fancytree-title', e => {
+    if (e.which === 2) {
+        const node = $.ui.fancytree.getNode(e);
+
+        treeUtils.getNotePath(node).then(notePath => {
+            if (notePath) {
+                noteDetailService.openInTab(notePath);
+            }
+        });
+
+        e.stopPropagation();
+        e.preventDefault();
     }
 });
 
@@ -651,26 +849,38 @@ utils.bindShortcut('alt+c', () => collapseTree()); // don't use shortened form s
 $collapseTreeButton.click(() => collapseTree());
 
 $createTopLevelNoteButton.click(createNewTopLevelNote);
-$scrollToCurrentNoteButton.click(scrollToCurrentNote);
+$scrollToActiveNoteButton.click(scrollToActiveNote);
+
+frontendLoaded.then(bundle.executeStartupBundles);
 
 export default {
     reload,
     collapseTree,
-    scrollToCurrentNote,
     setBranchBackgroundBasedOnProtectedStatus,
     setProtected,
-    expandToNote,
     activateNote,
     getFocusedNode,
-    getCurrentNode,
-    getCurrentNotePath,
-    setCurrentNotePathToHash,
+    getActiveNode,
     setNoteTitle,
     setPrefix,
-    createNewTopLevelNote,
     createNote,
+    createNoteInto,
     getSelectedNodes,
+    getSelectedOrActiveNodes,
     clearSelectedNodes,
     sortAlphabetically,
-    showTree
+    showTree,
+    loadTree,
+    treeInitialized,
+    setExpandedToServer,
+    getNodesByNoteId,
+    checkFolderStatus,
+    reloadNote,
+    loadTreeCache,
+    expandToNote,
+    getNodeFromPath,
+    resolveNotePath,
+    getSomeNotePath,
+    focusTree,
+    scrollToActiveNote
 };

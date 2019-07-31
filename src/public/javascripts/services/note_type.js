@@ -2,10 +2,7 @@ import treeService from './tree.js';
 import noteDetailService from './note_detail.js';
 import server from './server.js';
 import infoService from "./info.js";
-
-const $executeScriptButton = $("#execute-script-button");
-const $toggleEditButton = $('#toggle-edit-button');
-const $renderButton = $('#render-button');
+import confirmDialog from "../dialogs/confirm.js";
 
 const DEFAULT_MIME_TYPES = [
     { mime: 'text/x-csrc', title: 'C' },
@@ -44,15 +41,23 @@ const DEFAULT_MIME_TYPES = [
     { mime: 'text/x-yaml', title: 'YAML' }
 ];
 
-const noteTypeModel = new NoteTypeModel();
+let mimeTypes = DEFAULT_MIME_TYPES;
 
-function NoteTypeModel() {
+/**
+ * @param {TabContext} ctx
+ * @constructor
+ */
+function NoteTypeContext(ctx) {
     const self = this;
 
+    this.$executeScriptButton = ctx.$tabContent.find(".execute-script-button");
+    this.$renderButton = ctx.$tabContent.find('.render-button');
+
+    this.ctx = ctx;
     this.type = ko.observable('text');
     this.mime = ko.observable('');
 
-    this.codeMimeTypes = ko.observableArray(DEFAULT_MIME_TYPES);
+    this.codeMimeTypes = ko.observableArray(mimeTypes);
 
     this.typeString = function() {
         const type = self.type();
@@ -96,9 +101,7 @@ function NoteTypeModel() {
     };
 
     async function save() {
-        const note = noteDetailService.getCurrentNote();
-
-        await server.put('notes/' + note.noteId
+        await server.put('notes/' + self.ctx.note.noteId
             + '/type/' + encodeURIComponent(self.type())
             + '/mime/' + encodeURIComponent(self.mime()));
 
@@ -110,35 +113,63 @@ function NoteTypeModel() {
         self.updateExecuteScriptButtonVisibility();
     }
 
-    this.selectText = function() {
+    function confirmChangeIfContent() {
+        if (!self.ctx.getComponent().getContent()) {
+            return true;
+        }
+
+        return confirmDialog.confirm("It is not recommended to change note type when note content is not empty. Do you want to continue anyway?");
+    }
+
+    this.selectText = async function() {
+        if (!await confirmChangeIfContent()) {
+            return;
+        }
+
         self.type('text');
-        self.mime('');
+        self.mime('text/html');
 
         save();
     };
 
-    this.selectRender = function() {
+    this.selectRender = async function() {
+        if (!await confirmChangeIfContent()) {
+            return;
+        }
+
         self.type('render');
         self.mime('text/html');
 
         save();
     };
 
-    this.selectRelationMap = function() {
+    this.selectRelationMap = async function() {
+        if (!await confirmChangeIfContent()) {
+            return;
+        }
+
         self.type('relation-map');
         self.mime('application/json');
 
         save();
     };
 
-    this.selectCode = function() {
+    this.selectCode = async function() {
+        if (!await confirmChangeIfContent()) {
+            return;
+        }
+
         self.type('code');
-        self.mime('');
+        self.mime('text/plain');
 
         save();
     };
 
-    this.selectCodeMime = function(el) {
+    this.selectCodeMime = async function(el) {
+        if (!await confirmChangeIfContent()) {
+            return;
+        }
+
         self.type('code');
         self.mime(el.mime);
 
@@ -146,27 +177,19 @@ function NoteTypeModel() {
     };
 
     this.updateExecuteScriptButtonVisibility = function() {
-        $executeScriptButton.toggle(self.mime().startsWith('application/javascript'));
+        self.$executeScriptButton.toggle(ctx.note.mime.startsWith('application/javascript'));
+        self.$renderButton.toggle(ctx.note.type === 'render');
+    };
 
-        $toggleEditButton.toggle(self.type() === 'render');
-        $renderButton.toggle(self.type() === 'render');
-    }
+    ko.applyBindings(this, ctx.$tabContent.find('.note-type-wrapper')[0])
 }
 
-ko.applyBindings(noteTypeModel, document.getElementById('note-type-wrapper'));
-
 export default {
-    getNoteType: () => noteTypeModel.type(),
-    setNoteType: type => noteTypeModel.type(type),
-
-    getNoteMime: () => noteTypeModel.mime(),
-    setNoteMime: mime => {
-        noteTypeModel.mime(mime);
-
-        noteTypeModel.updateExecuteScriptButtonVisibility();
-    },
-
     getDefaultCodeMimeTypes: () => DEFAULT_MIME_TYPES.slice(),
-    getCodeMimeTypes: () => noteTypeModel.codeMimeTypes(),
-    setCodeMimeTypes: types => noteTypeModel.codeMimeTypes(types)
+    getCodeMimeTypes: () => mimeTypes,
+    setCodeMimeTypes: types => { mimeTypes = types; }
+};
+
+export {
+    NoteTypeContext
 };

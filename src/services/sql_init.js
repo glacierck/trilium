@@ -6,20 +6,28 @@ const resourceDir = require('./resource_dir');
 const appInfo = require('./app_info');
 const sql = require('./sql');
 const cls = require('./cls');
+const utils = require('./utils');
 const optionService = require('./options');
 const Option = require('../entities/option');
+const ImportContext = require('../services/import_context');
 
 async function createConnection() {
     return await sqlite.open(dataDir.DOCUMENT_PATH, {Promise});
 }
 
+const dbConnection = new Promise(async (resolve, reject) => {
+    // no need to create new connection now since DB stays the same all the time
+    const db = await createConnection();
+    sql.setDbConnection(db);
+
+    resolve();
+});
+
 let dbReadyResolve = null;
 const dbReady = new Promise(async (resolve, reject) => {
     dbReadyResolve = resolve;
 
-    // no need to create new connection now since DB stays the same all the time
-    const db = await createConnection();
-    sql.setDbConnection(db);
+    await dbConnection;
 
     initDbConnection();
 });
@@ -50,6 +58,14 @@ async function initDbConnection() {
         }
 
         await sql.execute("PRAGMA foreign_keys = ON");
+
+        const currentDbVersion = await getDbVersion();
+
+        if (currentDbVersion > appInfo.dbVersion) {
+            log.error(`Current DB version ${currentDbVersion} is newer than app db version ${appInfo.dbVersion} which means that it was created by newer and incompatible version of Trilium. Upgrade to latest version of Trilium to resolve this issue.`);
+
+            utils.crash();
+        }
 
         if (!await isDbUpToDate()) {
             // avoiding circular dependency
@@ -82,10 +98,11 @@ async function createInitialDatabase(username, password) {
         const rootNote = await new Note({
             noteId: 'root',
             title: 'root',
-            content: '',
             type: 'text',
             mime: 'text/html'
         }).save();
+
+        await rootNote.setContent('');
 
         await new Branch({
             branchId: 'root',
@@ -95,8 +112,10 @@ async function createInitialDatabase(username, password) {
             notePosition: 0
         }).save();
 
+        const dummyImportContext = new ImportContext("1", false);
+
         const tarImportService = require("./import/tar");
-        await tarImportService.importTar(demoFile, rootNote);
+        await tarImportService.importTar(dummyImportContext, demoFile, rootNote);
 
         const startNoteId = await sql.getValue("SELECT noteId FROM branches WHERE parentNoteId = 'root' AND isDeleted = 0 ORDER BY notePosition");
 
@@ -137,8 +156,12 @@ async function createDatabaseForSync(options, syncServerHost = '', syncProxy = '
     log.info("Schema and not synced options generated.");
 }
 
+async function getDbVersion() {
+    return parseInt(await sql.getValue("SELECT value FROM options WHERE name = 'dbVersion'"));
+}
+
 async function isDbUpToDate() {
-    const dbVersion = parseInt(await sql.getValue("SELECT value FROM options WHERE name = 'dbVersion'"));
+    const dbVersion = await getDbVersion();
 
     const upToDate = dbVersion >= appInfo.dbVersion;
 
@@ -155,8 +178,13 @@ async function dbInitialized() {
     await initDbConnection();
 }
 
+dbReady.then(async () => {
+    log.info("DB size: " + await sql.getValue("SELECT page_count * page_size / 1000 as size FROM pragma_page_count(), pragma_page_size()") + " KB");
+});
+
 module.exports = {
     dbReady,
+    dbConnection,
     schemaExists,
     isDbInitialized,
     initDbConnection,

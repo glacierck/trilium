@@ -4,6 +4,7 @@ const eventService = require('./events');
 const repository = require('./repository');
 const protectedSessionService = require('./protected_session');
 const utils = require('./utils');
+const hoistedNoteService = require('./hoisted_note');
 
 let loaded = false;
 let noteTitles = {};
@@ -32,7 +33,19 @@ async function load() {
 
     archived = await sql.getMap(`SELECT noteId, isInheritable FROM attributes WHERE isDeleted = 0 AND type = 'label' AND name = 'archived'`);
 
+    if (protectedSessionService.isProtectedSessionAvailable()) {
+        await loadProtectedNotes();
+    }
+
     loaded = true;
+}
+
+async function loadProtectedNotes() {
+    protectedNoteTitles = await sql.getMap(`SELECT noteId, title FROM notes WHERE isDeleted = 0 AND isProtected = 1`);
+
+    for (const noteId in protectedNoteTitles) {
+        protectedNoteTitles[noteId] = protectedSessionService.decryptNoteTitle(noteId, protectedNoteTitles[noteId]);
+    }
 }
 
 function highlightResults(results, allTokens) {
@@ -63,7 +76,7 @@ function highlightResults(results, allTokens) {
     }
 }
 
-function findNotes(query) {
+async function findNotes(query) {
     if (!noteTitles || !query.length) {
         return [];
     }
@@ -72,7 +85,7 @@ function findNotes(query) {
     // filtering '/' because it's used as separator
     const allTokens = query.trim().toLowerCase().split(" ").filter(token => token !== '/');
     const tokens = allTokens.slice();
-    const results = [];
+    let results = [];
 
     let noteIds = Object.keys(noteTitles);
 
@@ -118,6 +131,10 @@ function findNotes(query) {
                 search(parentNoteId, remainingTokens, [noteId], results);
             }
         }
+    }
+
+    if (hoistedNoteService.getHoistedNoteId() !== 'root') {
+        results = results.filter(res => res.pathArray.includes(hoistedNoteService.getHoistedNoteId()));
     }
 
     // sort results by depth of the note. This is based on the assumption that more important results
@@ -214,21 +231,25 @@ function getNoteTitle(noteId, parentNoteId) {
 function getNoteTitleArrayForPath(path) {
     const titles = [];
 
-    if (path[0] === 'root') {
-        if (path.length === 1) {
-            return [ getNoteTitle('root') ];
-        }
-        else {
-            path = path.slice(1);
-        }
+    if (path[0] === hoistedNoteService.getHoistedNoteId() && path.length === 1) {
+        return [ getNoteTitle(hoistedNoteService.getHoistedNoteId()) ];
     }
 
     let parentNoteId = 'root';
+    let hoistedNotePassed = false;
 
     for (const noteId of path) {
-        const title = getNoteTitle(noteId, parentNoteId);
+        // start collecting path segment titles only after hoisted note
+        if (hoistedNotePassed) {
+            const title = getNoteTitle(noteId, parentNoteId);
 
-        titles.push(title);
+            titles.push(title);
+        }
+
+        if (noteId === hoistedNoteService.getHoistedNoteId()) {
+            hoistedNotePassed = true;
+        }
+
         parentNoteId = noteId;
     }
 
@@ -245,6 +266,10 @@ function getSomePath(noteId, path) {
     if (noteId === 'root') {
         path.push(noteId);
         path.reverse();
+
+        if (!path.includes(hoistedNoteService.getHoistedNoteId())) {
+            return false;
+        }
 
         return path;
     }
@@ -286,7 +311,9 @@ function getNotePath(noteId) {
     }
 }
 
-eventService.subscribe(eventService.ENTITY_CHANGED, async ({entityName, entity}) => {
+eventService.subscribe([eventService.ENTITY_CHANGED, eventService.ENTITY_DELETED, eventService.ENTITY_SYNCED], async ({entityName, entity}) => {
+    // note that entity can also be just POJO without methods if coming from sync
+
     if (!loaded) {
         return;
     }
@@ -299,7 +326,16 @@ eventService.subscribe(eventService.ENTITY_CHANGED, async ({entityName, entity})
             delete childToParent[note.noteId];
         }
         else {
-            noteTitles[note.noteId] = note.title;
+            if (note.isProtected) {
+                // we can assume we have protected session since we managed to update
+                // removing from the maps is important when switching between protected & unprotected
+                protectedNoteTitles[note.noteId] = note.title;
+                delete noteTitles[note.noteId];
+            }
+            else {
+                noteTitles[note.noteId] = note.title;
+                delete protectedNoteTitles[note.noteId];
+            }
         }
     }
     else if (entityName === 'branches') {
@@ -340,15 +376,19 @@ eventService.subscribe(eventService.ENTITY_CHANGED, async ({entityName, entity})
     }
 });
 
-eventService.subscribe(eventService.ENTER_PROTECTED_SESSION, async () => {
-    if (!loaded) {
-        return;
-    }
+/**
+ * @param noteId
+ * @returns {boolean} - true if note exists (is not deleted) and is not archived.
+ */
+function isAvailable(noteId) {
+    const notePath = getNotePath(noteId);
 
-    protectedNoteTitles = await sql.getMap(`SELECT noteId, title FROM notes WHERE isDeleted = 0 AND isProtected = 1`);
+    return !!notePath;
+}
 
-    for (const noteId in protectedNoteTitles) {
-        protectedNoteTitles[noteId] = protectedSessionService.decryptNoteTitle(noteId, protectedNoteTitles[noteId]);
+eventService.subscribe(eventService.ENTER_PROTECTED_SESSION, () => {
+    if (loaded) {
+        loadProtectedNotes();
     }
 });
 
@@ -357,5 +397,7 @@ sqlInit.dbReady.then(() => utils.stopWatch("Autocomplete load", load));
 module.exports = {
     findNotes,
     getNotePath,
-    getNoteTitleForPath
+    getNoteTitleForPath,
+    isAvailable,
+    load
 };

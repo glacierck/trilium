@@ -2,15 +2,17 @@ const log = require('./log');
 const noteService = require('./notes');
 const sql = require('./sql');
 const utils = require('./utils');
-const dateUtils = require('./date_utils');
 const attributeService = require('./attributes');
 const dateNoteService = require('./date_notes');
 const treeService = require('./tree');
 const config = require('./config');
 const repository = require('./repository');
 const axios = require('axios');
+const dayjs = require('dayjs');
 const cloningService = require('./cloning');
 const messagingService = require('./messaging');
+const appInfo = require('./app_info');
+const searchService = require('./search');
 
 /**
  * This is the main backend API interface for scripts. It's published in the local "api" object.
@@ -18,20 +20,23 @@ const messagingService = require('./messaging');
  * @constructor
  * @hideconstructor
  */
-function BackendScriptApi(startNote, currentNote, originEntity) {
+function BackendScriptApi(currentNote, apiParams) {
     /** @property {Note} note where script started executing */
-    this.startNote = startNote;
-    /** @property {Note} note where script is currently executing */
+    this.startNote = apiParams.startNote;
+    /** @property {Note} note where script is currently executing. Don't mix this up with concept of active note */
     this.currentNote = currentNote;
     /** @property {Entity} entity whose event triggered this executions */
-    this.originEntity = originEntity;
+    this.originEntity = apiParams.originEntity;
+
+    for (const key in apiParams) {
+        this[key] = apiParams[key];
+    }
 
     this.axios = axios;
+    this.dayjs = dayjs;
 
     this.utils = {
-        unescapeHtml: utils.unescapeHtml,
-        isoDateTimeStr: dateUtils.dateStr,
-        isoDateStr: date => dateUtils.dateStr(date).substr(0, 10)
+        unescapeHtml: utils.unescapeHtml
     };
 
     /**
@@ -87,6 +92,30 @@ function BackendScriptApi(startNote, currentNote, originEntity) {
      * @returns {Promise<Entity[]>}
      */
     this.getEntities = repository.getEntities;
+
+    /**
+     * This is a powerful search method - you can search by attributes and their values, e.g.:
+     * "@dateModified =* MONTH AND @log". See full documentation for all options at: https://github.com/zadam/trilium/wiki/Search
+     *
+     * @method
+     * @param {string} searchString
+     * @returns {Promise<Note[]>}
+     */
+    this.searchForNotes = searchService.searchForNotes;
+
+    /**
+     * This is a powerful search method - you can search by attributes and their values, e.g.:
+     * "@dateModified =* MONTH AND @log". See full documentation for all options at: https://github.com/zadam/trilium/wiki/Search
+     *
+     * @method
+     * @param {string} searchString
+     * @returns {Promise<Note|null>}
+     */
+    this.searchForNote = async searchString => {
+        const notes = await searchService.searchForNotes(searchString);
+
+        return notes.length > 0 ? notes[0] : null;
+    };
 
     /**
      * Retrieves notes with given label name & value
@@ -169,6 +198,23 @@ function BackendScriptApi(startNote, currentNote, originEntity) {
     this.createNote = noteService.createNote;
 
     /**
+     * Creates new note according to given params and force all connected clients to refresh their tree.
+     *
+     * @method
+     *
+     * @param {string} parentNoteId - create new note under this parent
+     * @param {string} title
+     * @param {string} [content=""]
+     * @param {CreateNoteExtraOptions} [extraOptions={}]
+     * @returns {Promise<{note: Note, branch: Branch}>} object contains newly created entities note and branch
+     */
+    this.createNoteAndRefresh = async function(parentNoteId, title, content, extraOptions) {
+        await noteService.createNote(parentNoteId, title, content, extraOptions);
+
+        messagingService.refreshTree();
+    };
+
+    /**
      * Log given message to trilium logs.
      *
      * @param message
@@ -184,13 +230,41 @@ function BackendScriptApi(startNote, currentNote, originEntity) {
     this.getRootCalendarNote = dateNoteService.getRootCalendarNote;
 
     /**
-     * Returns day note for given date (YYYY-MM-DD format). If such note doesn't exist, it is created.
+     * Returns day note for given date. If such note doesn't exist, it is created.
      *
      * @method
-     * @param {string} date
+     * @param {string} date in YYYY-MM-DD format
      * @returns {Promise<Note|null>}
      */
     this.getDateNote = dateNoteService.getDateNote;
+
+    /**
+     * Returns note for the first date of the week of the given date.
+     *
+     * @method
+     * @param {string} date in YYYY-MM-DD format
+     * @param {object} options - "startOfTheWeek" - either "monday" (default) or "sunday"
+     * @returns {Promise<Note|null>}
+     */
+    this.getWeekNote = dateNoteService.getWeekNote;
+
+    /**
+     * Returns month note for given date. If such note doesn't exist, it is created.
+     *
+     * @method
+     * @param {string} date in YYYY-MM format
+     * @returns {Promise<Note|null>}
+     */
+    this.getMonthNote = dateNoteService.getMonthNote;
+
+    /**
+     * Returns year note for given year. If such note doesn't exist, it is created.
+     *
+     * @method
+     * @param {string} year in YYYY format
+     * @returns {Promise<Note|null>}
+     */
+    this.getYearNote = dateNoteService.getYearNote;
 
     /**
      * @method
@@ -233,7 +307,12 @@ function BackendScriptApi(startNote, currentNote, originEntity) {
      *
      * @returns {Promise<void>}
      */
-    this.refreshTree = () => messagingService.sendMessageToAllClients({ type: 'refresh-tree' });
+    this.refreshTree = messagingService.refreshTree;
+
+    /**
+     * @return {{syncVersion, appVersion, buildRevision, dbVersion, dataDirectory, buildDate}|*} - object representing basic info about running Trilium version
+     */
+    this.getAppInfo = () => appInfo
 }
 
 module.exports = BackendScriptApi;

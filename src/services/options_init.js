@@ -24,16 +24,21 @@ async function initSyncedOptions(username, password) {
 
     // passwordEncryptionService expects these options to already exist
     await optionService.createOption('encryptedDataKey', '', true);
-    await optionService.createOption('encryptedDataKeyIv', '', true);
 
     await passwordEncryptionService.setDataKey(password, utils.randomSecureToken(16), true);
 }
 
 async function initNotSyncedOptions(initialized, startNotePath = 'root', syncServerHost = '', syncProxy = '') {
-    await optionService.createOption('startNotePath', startNotePath, false);
-    await optionService.createOption('lastDailyBackupDate', dateUtils.nowDate(), false);
-    await optionService.createOption('lastWeeklyBackupDate', dateUtils.nowDate(), false);
-    await optionService.createOption('lastMonthlyBackupDate', dateUtils.nowDate(), false);
+    await optionService.createOption('openTabs', JSON.stringify([
+        {
+            notePath: startNotePath,
+            active: 1
+        }
+    ]), false);
+    await optionService.createOption('hoistedNoteId', 'root', false);
+    await optionService.createOption('lastDailyBackupDate', dateUtils.utcNowDateTime(), false);
+    await optionService.createOption('lastWeeklyBackupDate', dateUtils.utcNowDateTime(), false);
+    await optionService.createOption('lastMonthlyBackupDate', dateUtils.utcNowDateTime(), false);
     await optionService.createOption('dbVersion', appInfo.dbVersion, false);
 
     await optionService.createOption('lastSyncedPull', 0, false);
@@ -48,6 +53,10 @@ async function initNotSyncedOptions(initialized, startNotePath = 'root', syncSer
     await optionService.createOption('syncServerHost', syncServerHost, false);
     await optionService.createOption('syncServerTimeout', 5000, false);
     await optionService.createOption('syncProxy', syncProxy, false);
+
+    await optionService.createOption('mainFontSize', '100', false);
+    await optionService.createOption('treeFontSize', '100', false);
+    await optionService.createOption('detailFontSize', '110', false);
 
     await optionService.createOption('initialized', initialized ? 'true' : 'false', false);
 }

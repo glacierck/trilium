@@ -19,7 +19,7 @@ async function exec(req) {
 async function run(req) {
     const note = await repository.getNote(req.params.noteId);
 
-    const result = await scriptService.executeNote(note, note);
+    const result = await scriptService.executeNote(note, { originEntity: note });
 
     return { executionResult: result };
 }
@@ -30,7 +30,7 @@ async function getStartupBundles() {
     const bundles = [];
 
     for (const note of notes) {
-        const bundle = await scriptService.getScriptBundle(note);
+        const bundle = await scriptService.getScriptBundleForFrontend(note);
 
         if (bundle) {
             bundles.push(bundle);
@@ -53,14 +53,26 @@ async function getRelationBundles(req) {
     const bundles = [];
 
     for (const noteId of uniqueNoteIds) {
-        bundles.push(await scriptService.getScriptBundleForNoteId(noteId));
+        const note = await repository.getNote(noteId);
+
+        if (!note.isJavaScript() || note.getScriptEnv() !== 'frontend') {
+            continue;
+        }
+
+        const bundle = await scriptService.getScriptBundleForFrontend(note);
+
+        if (bundle) {
+            bundles.push(bundle);
+        }
     }
 
     return bundles;
 }
 
 async function getBundle(req) {
-    return await scriptService.getScriptBundleForNoteId(req.params.noteId);
+    const note = await repository.getNote(req.params.noteId);
+
+    return await scriptService.getScriptBundleForFrontend(note);
 }
 
 module.exports = {

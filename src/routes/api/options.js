@@ -1,12 +1,27 @@
 "use strict";
 
-const sql = require('../../services/sql');
 const optionService = require('../../services/options');
 const log = require('../../services/log');
+const attributes = require('../../services/attributes');
 
 // options allowed to be updated directly in options dialog
-const ALLOWED_OPTIONS = ['protectedSessionTimeout', 'noteRevisionSnapshotTimeInterval',
-    'zoomFactor', 'theme', 'syncServerHost', 'syncServerTimeout', 'syncProxy', 'leftPaneMinWidth', 'leftPaneWidthPercent'];
+const ALLOWED_OPTIONS = [
+    'protectedSessionTimeout',
+    'noteRevisionSnapshotTimeInterval',
+    'zoomFactor',
+    'theme',
+    'syncServerHost',
+    'syncServerTimeout',
+    'syncProxy',
+    'leftPaneMinWidth',
+    'leftPaneWidthPercent',
+    'hoistedNoteId',
+    'mainFontSize',
+    'treeFontSize',
+    'detailFontSize',
+    'openTabs',
+    'hideTabRowForOneTab'
+];
 
 async function getOptions() {
     return await optionService.getOptionsMap(ALLOWED_OPTIONS);
@@ -42,8 +57,31 @@ async function update(name, value) {
     return true;
 }
 
+async function getUserThemes() {
+    const notes = await attributes.getNotesWithLabel('appTheme');
+
+    const ret = [];
+
+    for (const note of notes) {
+        let value = await note.getLabelValue('appTheme');
+
+        if (!value) {
+            value = note.title.toLowerCase().replace(/[^a-z0-9]/gi, '-');
+        }
+
+        ret.push({
+            val: value,
+            title: note.title,
+            noteId: note.noteId
+        });
+    }
+
+    return ret;
+}
+
 module.exports = {
     getOptions,
     updateOption,
-    updateOptions
+    updateOptions,
+    getUserThemes
 };

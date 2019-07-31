@@ -4,15 +4,18 @@ const html = require('html');
 const repository = require('../repository');
 const tar = require('tar-stream');
 const path = require('path');
-const sanitize = require("sanitize-filename");
 const mimeTypes = require('mime-types');
 const TurndownService = require('turndown');
 const packageInfo = require('../../../package.json');
+const utils = require('../utils');
+const sanitize = require("sanitize-filename");
 
 /**
- * @param format - 'html' or 'markdown'
+ * @param {ExportContext} exportContext
+ * @param {Branch} branch
+ * @param {string} format - 'html' or 'markdown'
  */
-async function exportToTar(branch, format, res) {
+async function exportToTar(exportContext, branch, format, res) {
     let turndownService = format === 'markdown' ? new TurndownService() : null;
 
     const pack = tar.pack();
@@ -29,11 +32,11 @@ async function exportToTar(branch, format, res) {
             do {
                 index = existingFileNames[lcFileName]++;
 
-                newName = lcFileName + "_" + index;
+                newName = index + "_" + lcFileName;
             }
             while (newName in existingFileNames);
 
-            return fileName + "_" + index;
+            return index + "_" + fileName;
         }
         else {
             existingFileNames[lcFileName] = 1;
@@ -43,24 +46,32 @@ async function exportToTar(branch, format, res) {
     }
 
     function getDataFileName(note, baseFileName, existingFileNames) {
-        let extension;
+        const existingExtension = path.extname(baseFileName).toLowerCase();
+        let newExtension;
 
+        // following two are handled specifically since we always want to have these extensions no matter the automatic detection
+        // and/or existing detected extensions in the note name
         if (note.type === 'text' && format === 'markdown') {
-            extension = 'md';
+            newExtension = 'md';
+        }
+        else if (note.type === 'text' && format === 'html') {
+            newExtension = 'html';
         }
         else if (note.mime === 'application/x-javascript' || note.mime === 'text/javascript') {
-            extension = 'js';
+            newExtension = 'js';
+        }
+        else if (existingExtension.length > 0) { // if the page already has an extension, then we'll just keep it
+            newExtension = null;
         }
         else {
-            extension = mimeTypes.extension(note.mime) || "dat";
+            newExtension = mimeTypes.extension(note.mime) || "dat";
         }
 
         let fileName = baseFileName;
-        const existingExtension = path.extname(fileName).toLowerCase();
 
         // if the note is already named with extension (e.g. "jquery.js"), then it's silly to append exact same extension again
-        if (existingExtension !== extension) {
-            fileName += "." + extension;
+        if (newExtension && existingExtension !== "." + newExtension.toLowerCase()) {
+            fileName += "." + newExtension;
         }
 
         return getUniqueFilename(existingFileNames, fileName);
@@ -73,11 +84,10 @@ async function exportToTar(branch, format, res) {
             return;
         }
 
-        const baseFileName = branch.prefix ? (branch.prefix + ' - ' + note.title) : note.title;
+        const baseFileName = sanitize(branch.prefix ? (branch.prefix + ' - ' + note.title) : note.title);
 
         if (note.noteId in noteIdToMeta) {
-            const sanitizedFileName = sanitize(baseFileName + ".clone");
-            const fileName = getUniqueFilename(existingFileNames, sanitizedFileName);
+            const fileName = getUniqueFilename(existingFileNames, baseFileName + ".clone");
 
             return {
                 isClone: true,
@@ -96,7 +106,7 @@ async function exportToTar(branch, format, res) {
             isExpanded: branch.isExpanded,
             type: note.type,
             mime: note.mime,
-            // we don't export dateCreated and dateModified of any entity since that would be a bit misleading
+            // we don't export utcDateCreated and utcDateModified of any entity since that would be a bit misleading
             attributes: (await note.getOwnedAttributes()).map(attribute => {
                 return {
                     type: attribute.type,
@@ -114,6 +124,8 @@ async function exportToTar(branch, format, res) {
             })
         };
 
+        exportContext.increaseProgressCount();
+
         if (note.type === 'text') {
             meta.format = format;
         }
@@ -123,7 +135,7 @@ async function exportToTar(branch, format, res) {
         const childBranches = await note.getChildBranches();
 
         // if it's a leaf then we'll export it even if it's empty
-        if (note.content.length > 0 || childBranches.length === 0) {
+        if ((await note.getContent()).length > 0 || childBranches.length === 0) {
             meta.dataFileName = getDataFileName(note, baseFileName, existingFileNames);
         }
 
@@ -147,15 +159,21 @@ async function exportToTar(branch, format, res) {
         return meta;
     }
 
-    function prepareContent(note, format) {
+    async function prepareContent(note, format) {
+        const content = await note.getContent();
+
         if (format === 'html') {
-            return html.prettyPrint(note.content, {indent_size: 2});
+            if (!content.toLowerCase().includes("<html")) {
+                note.content = '<html><head><meta charset="utf-8"></head><body>' + content + '</body></html>';
+            }
+
+            return html.prettyPrint(content, {indent_size: 2});
         }
         else if (format === 'markdown') {
-            return turndownService.turndown(note.content);
+            return turndownService.turndown(content);
         }
         else {
-            return note.content;
+            return content;
         }
     }
 
@@ -175,10 +193,12 @@ async function exportToTar(branch, format, res) {
         notePaths[note.noteId] = path + (noteMeta.dataFileName || noteMeta.dirFileName);
 
         if (noteMeta.dataFileName) {
-            const content = prepareContent(note, noteMeta.format);
+            const content = await prepareContent(note, noteMeta.format);
 
             pack.entry({name: path + noteMeta.dataFileName, size: content.length}, content);
         }
+
+        exportContext.increaseProgressCount();
 
         if (noteMeta.children && noteMeta.children.length > 0) {
             const directoryPath = path + noteMeta.dirFileName;
@@ -219,12 +239,14 @@ async function exportToTar(branch, format, res) {
     pack.finalize();
 
     const note = await branch.getNote();
-    const tarFileName = sanitize((branch.prefix ? (branch.prefix + " - ") : "") + note.title);
+    const tarFileName = (branch.prefix ? (branch.prefix + " - ") : "") + note.title + ".tar";
 
-    res.setHeader('Content-Disposition', `file; filename="${tarFileName}.tar"`);
+    res.setHeader('Content-Disposition', utils.getContentDisposition(tarFileName));
     res.setHeader('Content-Type', 'application/tar');
 
     pack.pipe(res);
+
+    exportContext.exportFinished();
 }
 
 module.exports = {

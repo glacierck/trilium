@@ -1,14 +1,15 @@
 import treeService from '../services/tree.js';
 import searchNotesService from '../services/search_notes.js';
 import noteAutocompleteService from '../services/note_autocomplete.js';
+import utils from "../services/utils.js";
 
 const $dialog = $("#jump-to-note-dialog");
 const $autoComplete = $("#jump-to-note-autocomplete");
 const $showInFullTextButton = $("#show-in-full-text-button");
 
-$dialog.on("shown.bs.modal", e => $autoComplete.focus());
-
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
     $autoComplete.val('');

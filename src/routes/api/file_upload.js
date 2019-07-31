@@ -3,6 +3,7 @@
 const noteService = require('../../services/notes');
 const protectedSessionService = require('../../services/protected_session');
 const repository = require('../../services/repository');
+const utils = require('../../services/utils');
 
 async function uploadFile(req) {
     const parentNoteId = req.params.parentNoteId;
@@ -33,8 +34,7 @@ async function uploadFile(req) {
     };
 }
 
-async function downloadFile(req, res) {
-    const noteId = req.params.noteId;
+async function downloadNoteFile(noteId, res) {
     const note = await repository.getNote(noteId);
 
     if (!note) {
@@ -42,20 +42,27 @@ async function downloadFile(req, res) {
     }
 
     if (note.isProtected && !protectedSessionService.isProtectedSessionAvailable()) {
-        res.status(401).send("Protected session not available");
-        return;
+        return res.status(401).send("Protected session not available");
     }
 
     const originalFileName = await note.getLabel('originalFileName');
     const fileName = originalFileName ? originalFileName.value : note.title;
 
-    res.setHeader('Content-Disposition', 'file; filename="' + fileName + '"');
+    res.setHeader('Content-Disposition', utils.getContentDisposition(fileName));
     res.setHeader('Content-Type', note.mime);
 
-    res.send(note.content);
+    res.send(await note.getContent());
+}
+
+async function downloadFile(req, res) {
+    const noteId = req.params.noteId;
+
+    return await downloadNoteFile(noteId, res);
+
 }
 
 module.exports = {
     uploadFile,
-    downloadFile
+    downloadFile,
+    downloadNoteFile
 };

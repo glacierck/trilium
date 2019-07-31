@@ -1,34 +1,55 @@
 import noteDetailService from "./note_detail.js";
+import searchNotesService from "./search_notes.js";
 
-const $searchString = $("#search-string");
-const $component = $('#note-detail-search');
+class NoteDetailSearch {
+    /**
+     * @param {TabContext} ctx
+     */
+    constructor(ctx) {
+        this.ctx = ctx;
+        this.$searchString = ctx.$tabContent.find(".search-string");
+        this.$component = ctx.$tabContent.find('.note-detail-search');
+        this.$help = ctx.$tabContent.find(".note-detail-search-help");
+        this.$refreshButton = ctx.$tabContent.find('.note-detail-search-refresh-results-button');
 
-function getContent() {
-    JSON.stringify({
-        searchString: $searchString.val()
-    });
-}
+        this.$refreshButton.click(async () => {
+            await noteDetailService.saveNotesIfChanged();
 
-function show() {
-    $component.show();
-
-    try {
-        const json = JSON.parse(noteDetailService.getCurrentNote().content);
-
-        $searchString.val(json.searchString);
-    }
-    catch (e) {
-        console.log(e);
-        $searchString.val('');
+            await searchNotesService.refreshSearch();
+        });
     }
 
-    $searchString.on('input', noteDetailService.noteChanged);
+    render() {
+        this.$help.html(searchNotesService.getHelpText());
+
+        this.$component.show();
+
+        try {
+            const json = JSON.parse(this.ctx.note.content);
+
+            this.$searchString.val(json.searchString);
+        }
+        catch (e) {
+            console.log(e);
+            this.$searchString.val('');
+        }
+
+        this.$searchString.on('input', () => this.ctx.noteChanged());
+    }
+
+    getContent() {
+        return JSON.stringify({
+            searchString: this.$searchString.val()
+        });
+    }
+
+    focus() {}
+
+    onNoteChange() {}
+
+    cleanup() {}
+
+    scrollToTop() {}
 }
 
-export default {
-    getContent,
-    show,
-    focus: () => null,
-    onNoteChange: () => null,
-    cleanup: () => null
-}
+export default NoteDetailSearch;

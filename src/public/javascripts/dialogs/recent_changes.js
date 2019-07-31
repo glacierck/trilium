@@ -6,6 +6,8 @@ const $dialog = $("#recent-changes-dialog");
 const $content = $("#recent-changes-content");
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
     $dialog.modal();
@@ -26,7 +28,7 @@ async function showDialog() {
         const dayEl = $('<div>').append($('<b>').html(utils.formatDate(dateDay))).append(changesListEl);
 
         for (const change of dayChanges) {
-            const formattedTime = utils.formatTime(utils.parseDate(change.dateModifiedTo));
+            const formattedTime = utils.formatTime(utils.parseDate(change.utcDateModifiedTo));
 
             let noteLink;
 
@@ -51,7 +53,7 @@ function groupByDate(result) {
     const dayCache = {};
 
     for (const row of result) {
-        let dateDay = utils.parseDate(row.dateModifiedTo);
+        let dateDay = utils.parseDate(row.utcDateModifiedTo);
         dateDay.setHours(0);
         dateDay.setMinutes(0);
         dateDay.setSeconds(0);

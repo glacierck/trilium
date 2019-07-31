@@ -14,12 +14,16 @@ async function getRecentChanges() {
             note_revisions
             JOIN notes USING(noteId)
         ORDER BY 
-            dateModifiedTo DESC 
+            utcDateModifiedTo DESC 
         LIMIT 1000`);
 
-    if (!protectedSessionService.isProtectedSessionAvailable()) {
-        for (const change of recentChanges) {
-            if (change.current_isProtected) {
+    for (const change of recentChanges) {
+        if (change.current_isProtected) {
+            if (protectedSessionService.isProtectedSessionAvailable()) {
+                change.title = protectedSessionService.decryptNoteTitle(change.noteId, change.title);
+                change.current_title = protectedSessionService.decryptNoteTitle(change.noteId, change.current_title);
+            }
+            else {
                 change.title = change.current_title = "[Protected]";
             }
         }

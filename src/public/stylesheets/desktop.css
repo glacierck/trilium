@@ -1,0 +1,346 @@
+body {
+    font-size: var(--main-font-size);
+}
+
+#container {
+    margin: 0 auto; /* center */
+    height: 100vh;
+
+    display: grid;
+    grid-template-areas: "header header"
+    "left-pane tabs"
+    "left-pane tab-container";
+    grid-template-rows: auto
+    auto
+    1fr;
+
+    justify-content: center;
+    grid-gap: 0;
+}
+
+#container.distraction-free-mode {
+    grid-template-areas:
+    "tab-container" !important;
+    grid-template-rows: auto
+    auto
+    !important;
+    grid-template-columns: 1fr !important;
+}
+
+#note-tab-container {
+    grid-area: tab-container;
+    min-height: 0;
+    padding-left: 10px;
+}
+
+#search-box {
+    display: none;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+#tree {
+    overflow: auto;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 60%;
+    font-family: var(--tree-font-family);
+    font-size: var(--tree-font-size);
+}
+
+#left-pane {
+    grid-area: left-pane;
+    display: flex;
+    flex-direction: column;
+}
+
+#header {
+    grid-area: header;
+    background-color: var(--header-background-color);
+    display: flex;
+    align-items: center;
+    padding: 4px;
+}
+
+#header button {
+    padding: 1px 5px 1px 5px;
+    font-size: smaller;
+    margin-bottom: 2px;
+    margin-top: 2px;
+    margin-right: 8px;
+}
+
+#history-navigation {
+    margin: 0 15px 0 5px;
+    position: relative;
+    top: 2px;
+}
+
+#global-buttons {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 10px 0;
+    border: 1px solid var(--main-border-color);
+    border-radius: 7px;
+    margin: 5px 15px 5px 5px;
+}
+
+.dropdown-menu {
+    font-size: inherit;
+}
+
+#context-menu-container, #context-menu-container .dropdown-menu {
+    padding: 3px 0 0;
+    z-index: 1111;
+}
+
+#context-menu-container .dropdown-item {
+    padding: 0 7px 0 10px;
+    cursor: pointer;
+}
+
+li.dropdown-submenu:hover > ul.dropdown-menu {
+    display: block;
+}
+
+.dropdown-submenu {
+    position:relative;
+}
+
+.dropdown-submenu > .dropdown-menu {
+    top: 0;
+    left: 100%;
+    margin-top: -6px;
+}
+
+/* rotate caret on hover */
+.dropdown-menu > li > a:hover:after {
+    text-decoration: underline;
+    transform: rotate(-90deg);
+}
+
+.fancytree-loading span.fancytree-expander {
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+}
+
+.fancytree-loading  span.fancytree-expander:after {
+    width: 12px;
+    height: 12px;
+    margin-top: 2px;
+    border-width: 1px;
+    border-style: solid;
+}
+
+body {
+    /* FF basic styling */
+    scrollbar-color: var(--active-item-background-color) var(--main-background-color);
+}
+
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    border: 1px solid var(--main-border-color);
+}
+
+::-webkit-scrollbar-corner {
+    background-color: inherit;
+}
+
+.widget .note-info-table td, .widget .note-info-table th {
+    padding: 5px;
+}
+
+[data-toggle="tooltip"] span {
+    padding-bottom: 0;
+    border-bottom: 1px dotted;
+}
+
+.refresh-search-button {
+    cursor: pointer;
+    position: relative;
+    top: -1px;
+}
+
+.note-title-row {
+    flex-grow: 0;
+    flex-shrink: 0;
+    margin-top: 10px;
+}
+
+.note-title {
+    margin-left: 15px;
+    margin-right: 10px;
+    font-size: 150%;
+    border: 0;
+    width: 5em;
+    flex-grow: 100;
+}
+
+.note-tab-row {
+    box-sizing: border-box;
+    position: relative;
+    height: 33px;
+    background: var(--main-background-color);
+    border-radius: 5px 5px 0 0;
+    overflow: hidden;
+    grid-area: tabs;
+    margin-top: 5px;
+}
+.note-tab-row * {
+    box-sizing: inherit;
+    font: inherit;
+}
+.note-tab-row .note-tab-row-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.note-tab-row .note-tab {
+    position: absolute;
+    left: 0;
+    height: 33px;
+    width: 240px;
+    border: 0;
+    margin: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.note-new-tab {
+    position: absolute;
+    left: 0;
+    height: 32px;
+    width: 32px;
+    border: 0;
+    margin: 0;
+    z-index: 1;
+    text-align: center;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.note-new-tab:hover {
+    background-color: var(--accented-background-color);
+    border-radius: 5px;
+}
+
+.note-tab-row .note-tab[active] {
+    z-index: 5;
+}
+
+.note-tab-row .note-tab,
+.note-tab-row .note-tab * {
+    user-select: none;
+    cursor: default;
+}
+
+.note-tab-row .note-tab.note-tab-was-just-added {
+    top: 10px;
+    animation: note-tab-was-just-added 120ms forwards ease-in-out;
+}
+.note-tab-row .note-tab .note-tab-wrapper {
+    position: absolute;
+    display: flex;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 5px 8px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    overflow: hidden;
+    pointer-events: all;
+    background-image: linear-gradient(to bottom, var(--accented-background-color), var(--main-background-color));
+}
+
+.note-tab-row .note-tab[active] .note-tab-wrapper {
+    background-image: linear-gradient(to bottom, var(--more-accented-background-color), var(--main-background-color));
+    font-weight: bold;
+}
+
+.note-tab-row .note-tab[is-mini] .note-tab-wrapper {
+    padding-left: 2px;
+    padding-right: 2px;
+}
+.note-tab-row .note-tab .note-tab-title {
+    flex: 1;
+    vertical-align: top;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--muted-text-color);
+}
+.note-tab-row .note-tab[is-small] .note-tab-title {
+    margin-left: 0;
+}
+.note-tab-row .note-tab[active] .note-tab-title {
+    color: var(--main-text-color);
+}
+.note-tab-row .note-tab .note-tab-drag-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.note-tab-row .note-tab .note-tab-close {
+    flex-grow: 0;
+    flex-shrink: 0;
+    border-radius: 50%;
+    z-index: 100;
+    width: 24px;
+    height: 24px;
+    text-align: center;
+}
+
+.note-tab-row .note-tab .note-tab-close span {
+    font-size: 24px;
+    position: relative;
+    top: -6px;
+}
+
+.note-tab-row .note-tab .note-tab-close:hover {
+    background-color: var(--hover-item-background-color);
+    color: var(--hover-item-text-color);
+}
+
+.note-tab-row .note-tab[is-smaller] .note-tab-close {
+    margin-left: auto;
+}
+.note-tab-row .note-tab[is-mini]:not([active]) .note-tab-close {
+    display: none;
+}
+.note-tab-row .note-tab[is-mini][active] .note-tab-close {
+    margin-left: auto;
+    margin-right: auto;
+}
+@-moz-keyframes note-tab-was-just-added {
+    to {
+        top: 0;
+    }
+}
+@-webkit-keyframes note-tab-was-just-added {
+    to {
+        top: 0;
+    }
+}
+@-o-keyframes note-tab-was-just-added {
+    to {
+        top: 0;
+    }
+}
+@keyframes note-tab-was-just-added {
+    to {
+        top: 0;
+    }
+}
+.note-tab-row.note-tab-row-is-sorting .note-tab:not(.note-tab-is-dragging),
+.note-tab-row:not(.note-tab-row-is-sorting) .note-tab.note-tab-was-just-dragged {
+    transition: transform 120ms ease-in-out;
+}

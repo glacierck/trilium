@@ -1,4 +1,5 @@
 const sql = require('./sql');
+const sqlInit = require('./sql_init');
 const optionService = require('./options');
 const dateUtils = require('./date_utils');
 const syncTableService = require('./sync_table');
@@ -11,6 +12,7 @@ const Link = require('../entities/link');
 const NoteRevision = require('../entities/note_revision');
 const Branch = require('../entities/branch');
 const Attribute = require('../entities/attribute');
+const hoistedNoteService = require('../services/hoisted_note');
 
 async function getNewNotePosition(parentNoteId, noteData) {
     let newNotePos = 0;
@@ -25,7 +27,7 @@ async function getNewNotePosition(parentNoteId, noteData) {
 
         newNotePos = afterNote.notePosition + 1;
 
-        // not updating dateModified to avoig having to sync whole rows
+        // not updating utcDateModified to avoig having to sync whole rows
         await sql.execute('UPDATE branches SET notePosition = notePosition + 1 WHERE parentNoteId = ? AND notePosition > ? AND isDeleted = 0',
             [parentNoteId, afterNote.notePosition]);
 
@@ -76,21 +78,34 @@ async function createNewNote(parentNoteId, noteData) {
         }
     }
 
+    if (!noteData.mime) {
+        if (noteData.type === 'text') {
+            noteData.mime = 'text/html';
+        }
+        else if (noteData.type === 'code') {
+            noteData.mime = 'text/plain';
+        }
+        else if (noteData.type === 'relation-map' || noteData.type === 'search') {
+            noteData.mime = 'application/json';
+        }
+    }
+
     noteData.type = noteData.type || parentNote.type;
     noteData.mime = noteData.mime || parentNote.mime;
-
-    if (noteData.type === 'text' || noteData.type === 'code') {
-        noteData.content = noteData.content || "";
-    }
 
     const note = await new Note({
         noteId: noteData.noteId, // optionally can force specific noteId
         title: noteData.title,
-        content: noteData.content,
         isProtected: noteData.isProtected,
         type: noteData.type || 'text',
         mime: noteData.mime || 'text/html'
     }).save();
+
+    if (note.isStringNote()) {
+        noteData.content = noteData.content || "";
+    }
+
+    await note.setContent(noteData.content);
 
     const branch = await new Branch({
         noteId: note.noteId,
@@ -153,7 +168,8 @@ async function createNote(parentNoteId, title, content = "", extraOptions = {}) 
             noteId: note.noteId,
             type: attr.type,
             name: attr.name,
-            value: attr.value
+            value: attr.value,
+            isInheritable: !!attr.isInheritable
         });
     }
 
@@ -170,7 +186,12 @@ async function protectNoteRecursively(note, protect) {
 
 async function protectNote(note, protect) {
     if (protect !== note.isProtected) {
+        const content = await note.getContent();
+
         note.isProtected = protect;
+
+        // this will force de/encryption
+        await note.setContent(content);
 
         await note.save();
     }
@@ -200,7 +221,8 @@ function findImageLinks(content, foundLinks) {
     }
 
     // removing absolute references to server to keep it working between instances
-    return content.replace(/src="[^"]*\/api\/images\//g, 'src="/api/images/');
+    // we also omit / at the beginning to keep the paths relative
+    return content.replace(/src="[^"]*\/api\/images\//g, 'src="api/images/');
 }
 
 function findHyperLinks(content, foundLinks) {
@@ -282,31 +304,35 @@ async function saveLinks(note, content) {
 }
 
 async function saveNoteRevision(note) {
+    // files and images are immutable, they can't be updated
+    // but we don't even version titles which is probably not correct
+    if (note.type === 'file' || note.type === 'image' || await note.hasLabel('disableVersioning')) {
+        return;
+    }
+
     const now = new Date();
     const noteRevisionSnapshotTimeInterval = parseInt(await optionService.getOption('noteRevisionSnapshotTimeInterval'));
 
-    const revisionCutoff = dateUtils.dateStr(new Date(now.getTime() - noteRevisionSnapshotTimeInterval * 1000));
+    const revisionCutoff = dateUtils.utcDateStr(new Date(now.getTime() - noteRevisionSnapshotTimeInterval * 1000));
 
     const existingNoteRevisionId = await sql.getValue(
-        "SELECT noteRevisionId FROM note_revisions WHERE noteId = ? AND dateModifiedTo >= ?", [note.noteId, revisionCutoff]);
+        "SELECT noteRevisionId FROM note_revisions WHERE noteId = ? AND utcDateModifiedTo >= ?", [note.noteId, revisionCutoff]);
 
-    const msSinceDateCreated = now.getTime() - dateUtils.parseDateTime(note.dateCreated).getTime();
+    const msSinceDateCreated = now.getTime() - dateUtils.parseDateTime(note.utcDateCreated).getTime();
 
-    if (note.type !== 'file'
-        && !await note.hasLabel('disableVersioning')
-        && !existingNoteRevisionId
-        && msSinceDateCreated >= noteRevisionSnapshotTimeInterval * 1000) {
-
+    if (!existingNoteRevisionId && msSinceDateCreated >= noteRevisionSnapshotTimeInterval * 1000) {
         await new NoteRevision({
             noteId: note.noteId,
             // title and text should be decrypted now
             title: note.title,
-            content: note.content,
+            content: await note.getContent(),
             type: note.type,
             mime: note.mime,
             isProtected: false, // will be fixed in the protectNoteRevisions() call
+            utcDateModifiedFrom: note.utcDateModified,
+            utcDateModifiedTo: dateUtils.utcNowDateTime(),
             dateModifiedFrom: note.dateModified,
-            dateModifiedTo: dateUtils.nowDate()
+            dateModifiedTo: dateUtils.localNowDateTime()
         }).save();
     }
 }
@@ -318,21 +344,27 @@ async function updateNote(noteId, noteUpdates) {
         throw new Error(`Note ${noteId} is not available for change!`);
     }
 
-    if (note.type === 'file' || note.type === 'image') {
-        // files and images are immutable, they can't be updated
-        noteUpdates.content = note.content;
-    }
-
     await saveNoteRevision(note);
+
+    // if protected status changed, then we need to encrypt/decrypt the content anyway
+    if (['file', 'image'].includes(note.type) && note.isProtected !== noteUpdates.isProtected) {
+        noteUpdates.content = await note.getContent();
+    }
 
     const noteTitleChanged = note.title !== noteUpdates.title;
 
-    noteUpdates.content = await saveLinks(note, noteUpdates.content);
-
     note.title = noteUpdates.title;
-    note.setContent(noteUpdates.content);
     note.isProtected = noteUpdates.isProtected;
     await note.save();
+
+    if (!['file', 'image'].includes(note.type)) {
+        noteUpdates.content = await saveLinks(note, noteUpdates.content);
+
+        await note.setContent(noteUpdates.content);
+    }
+    else if (noteUpdates.content) {
+        await note.setContent(noteUpdates.content);
+    }
 
     if (noteTitleChanged) {
         await triggerNoteTitleChanged(note);
@@ -341,12 +373,16 @@ async function updateNote(noteId, noteUpdates) {
     await protectNoteRevisions(note);
 }
 
+/** @return {boolean} - true if note has been deleted, false otherwise */
 async function deleteNote(branch) {
     if (!branch || branch.isDeleted) {
-        return;
+        return false;
     }
 
-    if (branch.branchId === 'root' || branch.noteId === 'root') {
+    if (branch.branchId === 'root'
+        || branch.noteId === 'root'
+        || branch.noteId === await hoistedNoteService.getHoistedNoteId()) {
+
         throw new Error("Can't delete root branch/note");
     }
 
@@ -358,13 +394,7 @@ async function deleteNote(branch) {
 
     if (notDeletedBranches.length === 0) {
         note.isDeleted = true;
-        // we don't reset content here, that's postponed and done later to give the user
-        // a chance to correct a mistake
         await note.save();
-
-        for (const noteRevision of await note.getRevisions()) {
-            await noteRevision.save();
-        }
 
         for (const childBranch of await note.getChildBranches()) {
             await deleteNote(childBranch);
@@ -389,24 +419,31 @@ async function deleteNote(branch) {
             link.isDeleted = true;
             await link.save();
         }
+
+        return true;
+    }
+    else {
+        return false;
     }
 }
 
 async function cleanupDeletedNotes() {
-    const cutoffDate = new Date(new Date().getTime() - 48 * 3600 * 1000);
+    const cutoffDate = new Date(Date.now() - 48 * 3600 * 1000);
 
     // it's better to not use repository for this because it will complain about saving protected notes
     // out of protected session
 
-    await sql.execute("UPDATE notes SET content = NULL WHERE isDeleted = 1 AND content IS NOT NULL AND dateModified <= ?", [dateUtils.dateStr(cutoffDate)]);
+    await sql.execute("UPDATE note_contents SET content = NULL WHERE content IS NOT NULL AND noteId IN (SELECT noteId FROM notes WHERE isDeleted = 1 AND notes.utcDateModified <= ?)", [dateUtils.utcDateStr(cutoffDate)]);
 
-    await sql.execute("UPDATE note_revisions SET content = NULL WHERE note_revisions.content IS NOT NULL AND noteId IN (SELECT noteId FROM notes WHERE isDeleted = 1 AND notes.dateModified <= ?)", [dateUtils.dateStr(cutoffDate)]);
+    await sql.execute("UPDATE note_revisions SET content = NULL WHERE note_revisions.content IS NOT NULL AND noteId IN (SELECT noteId FROM notes WHERE isDeleted = 1 AND notes.utcDateModified <= ?)", [dateUtils.utcDateStr(cutoffDate)]);
 }
 
-// first cleanup kickoff 5 minutes after startup
-setTimeout(cls.wrap(cleanupDeletedNotes), 5 * 60 * 1000);
+sqlInit.dbReady.then(() => {
+    // first cleanup kickoff 5 minutes after startup
+    setTimeout(cls.wrap(cleanupDeletedNotes), 5 * 60 * 1000);
 
-setInterval(cls.wrap(cleanupDeletedNotes), 4 * 3600 * 1000);
+    setInterval(cls.wrap(cleanupDeletedNotes), 4 * 3600 * 1000);
+});
 
 module.exports = {
     createNewNote,

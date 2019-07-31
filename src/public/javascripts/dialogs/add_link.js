@@ -2,8 +2,8 @@ import cloningService from '../services/cloning.js';
 import linkService from '../services/link.js';
 import noteDetailService from '../services/note_detail.js';
 import treeUtils from '../services/tree_utils.js';
-import noteDetailText from "../services/note_detail_text.js";
 import noteAutocompleteService from "../services/note_autocomplete.js";
+import utils from "../services/utils.js";
 
 const $dialog = $("#add-link-dialog");
 const $form = $("#add-link-form");
@@ -24,10 +24,16 @@ function setLinkType(linkType) {
     linkTypeChanged();
 }
 
-async function showDialog() {
+async function showDialogForClone() {
+    showDialog('selected-to-active');
+}
+
+async function showDialog(linkType) {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    if (noteDetailService.getCurrentNoteType() === 'text') {
+    if (noteDetailService.getActiveNoteType() === 'text') {
         $linkTypeHtml.prop('disabled', false);
 
         setLinkType('html');
@@ -35,7 +41,11 @@ async function showDialog() {
     else {
         $linkTypeHtml.prop('disabled', true);
 
-        setLinkType('selected-to-current');
+        setLinkType('selected-to-active');
+    }
+
+    if (linkType === 'selected-to-active') {
+        setLinkType(linkType);
     }
 
     $dialog.modal();
@@ -86,27 +96,28 @@ $form.submit(() => {
             $dialog.modal('hide');
 
             const linkHref = '#' + notePath;
+            const editor = noteDetailService.getActiveEditor();
 
             if (hasSelection()) {
-                const editor = noteDetailText.getEditor();
-
                 editor.execute('link', linkHref);
             }
             else {
                 linkService.addLinkToEditor(linkTitle, linkHref);
             }
+
+            editor.editing.view.focus();
         }
-        else if (linkType === 'selected-to-current') {
+        else if (linkType === 'selected-to-active') {
             const prefix = $clonePrefix.val();
 
-            cloningService.cloneNoteTo(noteId, noteDetailService.getCurrentNoteId(), prefix);
+            cloningService.cloneNoteTo(noteId, noteDetailService.getActiveNoteId(), prefix);
 
             $dialog.modal('hide');
         }
-        else if (linkType === 'current-to-selected') {
+        else if (linkType === 'active-to-selected') {
             const prefix = $clonePrefix.val();
 
-            cloningService.cloneNoteTo(noteDetailService.getCurrentNoteId(), noteId, prefix);
+            cloningService.cloneNoteTo(noteDetailService.getActiveNoteId(), noteId, prefix);
 
             $dialog.modal('hide');
         }
@@ -120,7 +131,7 @@ $form.submit(() => {
 
 // returns true if user selected some text, false if there's no selection
 function hasSelection() {
-    const model = noteDetailText.getEditor().model;
+    const model = noteDetailService.getActiveEditor().model;
     const selection = model.document.selection;
 
     return !selection.isCollapsed;
@@ -138,5 +149,6 @@ function linkTypeChanged() {
 $linkTypes.change(linkTypeChanged);
 
 export default {
-    showDialog
+    showDialog,
+    showDialogForClone
 };

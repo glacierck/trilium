@@ -14,14 +14,14 @@ async function returnImage(req, res) {
     else if (image.type !== 'image') {
         return res.sendStatus(400);
     }
-    else if (image.data === null) {
+    else if (image.isDeleted || image.data === null) {
         res.set('Content-Type', 'image/png');
         return res.send(fs.readFileSync(RESOURCE_DIR + '/db/image-deleted.png'));
     }
 
     res.set('Content-Type', image.mime);
 
-    res.send(image.content);
+    res.send(await image.getContent());
 }
 
 async function uploadImage(req) {
@@ -34,11 +34,11 @@ async function uploadImage(req) {
         return [404, `Note ${noteId} doesn't exist.`];
     }
 
-    if (!["image/png", "image/jpeg", "image/gif"].includes(file.mimetype)) {
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.mimetype)) {
         return [400, "Unknown image type: " + file.mimetype];
     }
 
-    const {url} = await imageService.saveImage(file.buffer, file.originalname, noteId);
+    const {url} = await imageService.saveImage(file.buffer, file.originalname, noteId, true);
 
     return {
         uploaded: true,

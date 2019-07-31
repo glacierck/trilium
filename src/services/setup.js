@@ -1,13 +1,18 @@
-const rp = require('request-promise');
 const syncService = require('./sync');
 const log = require('./log');
 const sqlInit = require('./sql_init');
 const repository = require('./repository');
 const optionService = require('./options');
 const syncOptions = require('./sync_options');
+const request = require('./request');
+const appInfo = require('./app_info');
 
 async function hasSyncServerSchemaAndSeed() {
     const response = await requestToSyncServer('GET', '/api/setup/status');
+
+    if (response.syncVersion !== appInfo.syncVersion) {
+        throw new Error(`Could not setup sync since local sync protocol version is ${appInfo.syncVersion} while remote is ${response.syncVersion}. To fix this issue, use same Trilium version on all instances.`);
+    }
 
     return response.schemaExists;
 }
@@ -27,7 +32,8 @@ async function sendSeedToSyncServer() {
     log.info("Initiating sync to server");
 
     await requestToSyncServer('POST', '/api/setup/sync-seed', {
-        options: await getSyncSeedOptions()
+        options: await getSyncSeedOptions(),
+        syncVersion: appInfo.syncVersion
     });
 
     // this is completely new sync, need to reset counters. If this would not be new sync,
@@ -37,23 +43,13 @@ async function sendSeedToSyncServer() {
 }
 
 async function requestToSyncServer(method, path, body = null) {
-    const rpOpts = {
-        uri: await syncOptions.getSyncServerHost() + path,
-        method: method,
-        json: true
-    };
-
-    if (body) {
-        rpOpts.body = body;
-    }
-
-    const syncProxy = await syncOptions.getSyncProxy();
-
-    if (syncProxy) {
-        rpOpts.proxy = syncProxy;
-    }
-
-    return await rp(rpOpts);
+    return await request.exec({
+        method,
+        url: await syncOptions.getSyncServerHost() + path,
+        body,
+        proxy: await syncOptions.getSyncProxy(),
+        timeout: await syncOptions.getSyncTimeout()
+    });
 }
 
 async function setupSyncFromSyncServer(syncServerHost, syncProxy, username, password) {
@@ -68,20 +64,28 @@ async function setupSyncFromSyncServer(syncServerHost, syncProxy, username, pass
         log.info("Getting document options from sync server.");
 
         // response is expected to contain documentId and documentSecret options
-        const options = await rp.get({
-            uri: syncServerHost + '/api/setup/sync-seed',
+        const resp = await request.exec({
+            method: 'get',
+            url: syncServerHost + '/api/setup/sync-seed',
             auth: {
                 'user': username,
                 'pass': password
             },
-            json: true
+            proxy: syncProxy
         });
 
-        if (syncProxy) {
-            options.proxy = syncProxy;
+        if (resp.syncVersion !== appInfo.syncVersion) {
+            const message = `Could not setup sync since local sync protocol version is ${appInfo.syncVersion} while remote is ${resp.syncVersion}. To fix this issue, use same Trilium version on all instances.`;
+
+            log.error(message);
+
+            return {
+                result: 'failure',
+                error: message
+            }
         }
 
-        await sqlInit.createDatabaseForSync(options, syncServerHost, syncProxy);
+        await sqlInit.createDatabaseForSync(resp.options, syncServerHost, syncProxy);
 
         triggerSync();
 

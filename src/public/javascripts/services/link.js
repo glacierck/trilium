@@ -1,6 +1,7 @@
 import treeService from './tree.js';
-import noteDetailText from './note_detail_text.js';
 import treeUtils from './tree_utils.js';
+import contextMenuService from "./context_menu.js";
+import noteDetailService from "./note_detail.js";
 
 function getNotePathFromUrl(url) {
     const notePathMatch = /#(root[A-Za-z0-9/]*)$/.exec(url);
@@ -11,16 +12,6 @@ function getNotePathFromUrl(url) {
     else {
         return notePathMatch[1];
     }
-}
-
-function getNotePathFromLabel(label) {
-    const notePathMatch = / \((root[A-Za-z0-9/]*)\)/.exec(label);
-
-    if (notePathMatch !== null) {
-        return notePathMatch[1];
-    }
-
-    return null;
 }
 
 async function createNoteLink(notePath, noteTitle = null) {
@@ -52,14 +43,20 @@ function getNotePathFromLink($link) {
 }
 
 function goToLink(e) {
-    e.preventDefault();
-
     const $link = $(e.target);
 
     const notePath = getNotePathFromLink($link);
 
     if (notePath) {
-        treeService.activateNote(notePath);
+        if ((e.which === 1 && e.ctrlKey) || e.which === 2) {
+            noteDetailService.openInTab(notePath);
+        }
+        else if (e.which === 1) {
+            treeService.activateNote(notePath);
+        }
+        else {
+            return false;
+        }
     }
     else {
         const address = $link.attr('href');
@@ -68,44 +65,98 @@ function goToLink(e) {
             window.open(address, '_blank');
         }
     }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    return true;
 }
 
 function addLinkToEditor(linkTitle, linkHref) {
-    const editor = noteDetailText.getEditor();
+    const editor = noteDetailService.getActiveEditor();
 
-    editor.model.change( writer => {
-        const insertPosition = editor.model.document.selection.getFirstPosition();
-        writer.insertText(linkTitle, { linkHref: linkHref }, insertPosition);
-    });
+    if (editor) {
+        editor.model.change(writer => {
+            const insertPosition = editor.model.document.selection.getFirstPosition();
+            writer.insertText(linkTitle, {linkHref: linkHref}, insertPosition);
+        });
+    }
 }
 
 function addTextToEditor(text) {
-    const editor = noteDetailText.getEditor();
+    const editor = noteDetailService.getActiveEditor();
 
-    editor.model.change(writer => {
-        const insertPosition = editor.model.document.selection.getFirstPosition();
-        writer.insertText(text, insertPosition);
+    if (editor) {
+        editor.model.change(writer => {
+            const insertPosition = editor.model.document.selection.getFirstPosition();
+            writer.insertText(text, insertPosition);
+        });
+    }
+}
+
+function init() {
+    ko.bindingHandlers.noteLink = {
+        init: async function(element, valueAccessor, allBindings, viewModel, bindingContext) {
+            const noteId = ko.unwrap(valueAccessor());
+
+            if (noteId) {
+                const link = await createNoteLink(noteId);
+
+                $(element).append(link);
+            }
+        }
+    };
+}
+
+function tabContextMenu(e) {
+    const $link = $(e.target);
+
+    const notePath = getNotePathFromLink($link);
+
+    if (!notePath) {
+        return;
+    }
+
+    e.preventDefault();
+
+    contextMenuService.initContextMenu(e, {
+        getContextMenuItems: () => {
+            return [
+                {title: "Open note in new tab", cmd: "openNoteInNewTab", uiIcon: "arrow-up-right"}
+            ];
+        },
+        selectContextMenuItem: (e, cmd) => {
+            if (cmd === 'openNoteInNewTab') {
+                noteDetailService.loadNoteDetail(notePath.split("/").pop(), { newTab: true });
+            }
+        }
     });
 }
 
-ko.bindingHandlers.noteLink = {
-    init: async function(element, valueAccessor, allBindings, viewModel, bindingContext) {
-        const noteId = ko.unwrap(valueAccessor());
-
-        if (noteId) {
-            const link = await createNoteLink(noteId);
-
-            $(element).append(link);
-        }
-    }
-};
+$(document).on('contextmenu', '.note-detail-text a', tabContextMenu);
+$(document).on('contextmenu', "a[data-action='note']", tabContextMenu);
+$(document).on('contextmenu', ".note-detail-render a", tabContextMenu);
 
 // when click on link popup, in case of internal link, just go the the referenced note instead of default behavior
 // of opening the link in new window/tab
-$(document).on('click', "a[data-action='note']", goToLink);
-$(document).on('click', 'div.popover-content a, div.ui-tooltip-content a', goToLink);
-$(document).on('dblclick', '#note-detail-text a', goToLink);
-$(document).on('click', 'span.ck-button__label', e => {
+$(document).on('mousedown', "a[data-action='note']", goToLink);
+$(document).on('mousedown', 'div.popover-content a, div.ui-tooltip-content a', goToLink);
+$(document).on('dblclick', '.note-detail-text a', goToLink);
+$(document).on('mousedown', '.note-detail-text a', function (e) {
+    const notePath = getNotePathFromLink($(e.target));
+    if (notePath && ((e.which === 1 && e.ctrlKey) || e.which === 2)) {
+        // if it's a ctrl-click, then we open on new tab, otherwise normal flow (CKEditor opens link-editing dialog)
+        e.preventDefault();
+
+        noteDetailService.loadNoteDetail(notePath, { newTab: true });
+
+        return true;
+    }
+});
+
+$(document).on('mousedown', '.note-detail-render a', goToLink);
+$(document).on('mousedown', '.note-detail-text.ck-read-only a', goToLink);
+$(document).on('mousedown', 'span.ck-button__label', e => {
     // this is a link preview dialog from CKEditor link editing
     // for some reason clicked element is span
 
@@ -120,9 +171,10 @@ $(document).on('click', 'span.ck-button__label', e => {
 });
 
 export default {
-    getNotePathFromLabel,
     getNotePathFromUrl,
     createNoteLink,
     addLinkToEditor,
-    addTextToEditor
+    addTextToEditor,
+    init,
+    goToLink
 };

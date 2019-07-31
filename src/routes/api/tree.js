@@ -38,6 +38,7 @@ async function getNotes(noteIds) {
 async function getRelations(noteIds) {
     // we need to fetch both parentNoteId and noteId matches because we can have loaded child
     // of which only some of the parents has been loaded.
+    // also now with note hoisting, it is possible to have the note displayed without its parent chain being loaded
 
     const relations = await sql.getManyRows(`SELECT branchId, noteId AS 'childNoteId', parentNoteId, notePosition FROM branches WHERE isDeleted = 0 
          AND (parentNoteId IN (???) OR noteId IN (???))`, noteIds);
@@ -50,18 +51,23 @@ async function getRelations(noteIds) {
 }
 
 async function getTree() {
+    const hoistedNoteId = await optionService.getOption('hoistedNoteId');
+
     // we fetch all branches of notes, even if that particular branch isn't visible
     // this allows us to e.g. detect and properly display clones
     const branches = await sql.getRows(`
         WITH RECURSIVE
             tree(branchId, noteId, isExpanded) AS (
-            SELECT branchId, noteId, isExpanded FROM branches WHERE branchId = 'root' 
+            SELECT branchId, noteId, isExpanded FROM branches WHERE noteId = ? 
             UNION ALL
             SELECT branches.branchId, branches.noteId, branches.isExpanded FROM branches
               JOIN tree ON branches.parentNoteId = tree.noteId
               WHERE tree.isExpanded = 1 AND branches.isDeleted = 0
           )
-        SELECT branches.* FROM tree JOIN branches USING(noteId) WHERE branches.isDeleted = 0 ORDER BY branches.notePosition`);
+        SELECT branches.* FROM tree JOIN branches USING(noteId) WHERE branches.isDeleted = 0 ORDER BY branches.notePosition`, [hoistedNoteId]);
+
+    // we also want root branch in there because all the paths start with root
+    branches.push(await sql.getRow(`SELECT * FROM branches WHERE branchId = 'root'`));
 
     const noteIds = Array.from(new Set(branches.map(b => b.noteId)));
 
@@ -70,7 +76,6 @@ async function getTree() {
     const relations = await getRelations(noteIds);
 
     return {
-        startNotePath: (await optionService.getOption('startNotePath')) || 'root',
         branches,
         notes,
         relations

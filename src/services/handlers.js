@@ -1,7 +1,6 @@
 const eventService = require('./events');
 const scriptService = require('./script');
 const treeService = require('./tree');
-const messagingService = require('./messaging');
 const log = require('./log');
 const Attribute = require('../entities/attribute');
 
@@ -12,7 +11,7 @@ async function runAttachedRelations(note, relationName, originEntity) {
         const scriptNote = await relation.getTargetNote();
 
         if (scriptNote) {
-            await scriptService.executeNote(scriptNote, originEntity);
+            await scriptService.executeNoteNoException(scriptNote, { originEntity });
         }
         else {
             log.error(`Target note ${relation.value} of atttribute ${relation.attributeId} has not been found.`);
@@ -29,15 +28,12 @@ eventService.subscribe(eventService.NOTE_TITLE_CHANGED, async note => {
         for (const parent of parents) {
             if (await parent.hasLabel("sorted")) {
                 await treeService.sortNotesAlphabetically(parent.noteId);
-
-                messagingService.sendMessageToAllClients({ type: 'refresh-tree' });
-                break; // sending the message once is enough
             }
         }
     }
 });
 
-eventService.subscribe(eventService.ENTITY_CHANGED, async ({ entityName, entity }) => {
+eventService.subscribe([ eventService.ENTITY_CHANGED, eventService.ENTITY_DELETED ], async ({ entityName, entity }) => {
     if (entityName === 'attributes') {
         await runAttachedRelations(await entity.getNote(), 'runOnAttributeChange', entity);
     }

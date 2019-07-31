@@ -6,6 +6,8 @@ const $dialog = $("#event-log-dialog");
 const $list = $("#event-log-list");
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
     $dialog.modal();
@@ -15,7 +17,7 @@ async function showDialog() {
     $list.empty();
 
     for (const event of result) {
-        const dateTime = utils.formatDateTime(utils.parseDate(event.dateCreated));
+        const dateTime = utils.formatDateTime(utils.parseDate(event.utcDateCreated));
 
         if (event.noteId) {
             const noteLink = await linkService.createNoteLink(event.noteId).prop('outerHTML');

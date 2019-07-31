@@ -1,3 +1,5 @@
+import cssLoader from './css_loader.js';
+
 const CKEDITOR = {"js": ["libraries/ckeditor/ckeditor.js"]};
 
 const CODE_MIRROR = {
@@ -32,9 +34,22 @@ const RELATION_MAP = {
     ]
 };
 
+const LINK_MAP = {
+    js: [
+        "libraries/jsplumb.js",
+        "libraries/panzoom.js",
+        "libraries/springy.js"
+    ],
+    css: [
+        "stylesheets/link_map.css"
+    ]
+};
+
+const PRINT_THIS = {js: ["libraries/printThis.js"]};
+
 async function requireLibrary(library) {
     if (library.css) {
-        library.css.map(cssUrl => requireCss(cssUrl));
+        library.css.map(cssUrl => cssLoader.requireCss(cssUrl));
     }
 
     if (library.js) {
@@ -59,21 +74,13 @@ async function requireScript(url) {
     await loadedScriptPromises[url];
 }
 
-async function requireCss(url) {
-    const css = Array
-        .from(document.querySelectorAll('link'))
-        .map(scr => scr.href);
-
-    if (!css.includes(url)) {
-        $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', url));
-    }
-}
-
 export default {
     requireLibrary,
     CKEDITOR,
     CODE_MIRROR,
     ESLINT,
     COMMONMARK,
-    RELATION_MAP
+    RELATION_MAP,
+    LINK_MAP,
+    PRINT_THIS
 }

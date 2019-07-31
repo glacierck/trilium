@@ -2,8 +2,8 @@ import noteDetailService from '../services/note_detail.js';
 import server from '../services/server.js';
 import infoService from "../services/info.js";
 import treeUtils from "../services/tree_utils.js";
-import attributeService from "../services/attributes.js";
 import attributeAutocompleteService from "../services/attribute_autocomplete.js";
+import utils from "../services/utils.js";
 
 const $dialog = $("#attributes-dialog");
 const $saveAttributesButton = $("#save-attributes-button");
@@ -90,14 +90,14 @@ function AttributesModel() {
     }
 
     this.loadAttributes = async function() {
-        const noteId = noteDetailService.getCurrentNoteId();
+        const noteId = noteDetailService.getActiveNoteId();
 
         const attributes = await server.get('notes/' + noteId + '/attributes');
 
         await showAttributes(attributes);
 
         // attribute might not be rendered immediatelly so could not focus
-        setTimeout(() => $(".attribute-type-select:last").focus(), 100);
+        setTimeout(() => $(".attribute-type-select:last").focus(), 1000);
     };
 
     this.deleteAttribute = function(data, event) {
@@ -136,7 +136,7 @@ function AttributesModel() {
 
         self.updateAttributePositions();
 
-        const noteId = noteDetailService.getCurrentNoteId();
+        const noteId = noteDetailService.getActiveNoteId();
 
         const attributesToSave = self.ownedAttributes()
             .map(attribute => attribute())
@@ -168,7 +168,11 @@ function AttributesModel() {
 
         infoService.showMessage("Attributes have been saved.");
 
-        attributeService.refreshAttributes();
+        const ctx = noteDetailService.getActiveTabContext();
+
+        ctx.attributes.refreshAttributes();
+
+        noteDetailService.reload();
     };
 
     function addLastEmptyRow() {
@@ -251,6 +255,8 @@ function AttributesModel() {
 }
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     // lazily apply bindings on first use
     if (!ko.dataFor($dialog[0])) {
         ko.applyBindings(attributesModel, $dialog[0]);

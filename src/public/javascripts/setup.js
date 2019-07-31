@@ -1,4 +1,7 @@
 import utils from "./services/utils.js";
+import macInit from './services/mac_init.js';
+
+macInit.init();
 
 function SetupModel() {
     if (syncInProgress) {
@@ -25,26 +28,20 @@ function SetupModel() {
 
     this.instanceType = utils.isElectron() ? "desktop" : "server";
 
-    this.setupTypeSelected = this.getSetupType = () =>
-        this.setupNewDocument()
-        || this.setupSyncFromDesktop()
-        || this.setupSyncFromServer();
+    this.setupTypeSelected = () => !!this.setupType();
 
     this.selectSetupType = () => {
-        this.step(this.getSetupType());
-        this.setupType(this.getSetupType());
+        this.step(this.setupType());
     };
 
     this.back = () => {
         this.step("setup-type");
 
-        this.setupNewDocument(false);
-        this.setupSyncFromServer(false);
-        this.setupSyncFromDesktop(false);
+        this.setupType("");
     };
 
     this.finish = async () => {
-        if (this.setupNewDocument()) {
+        if (this.setupType() === 'new-document') {
             const username = this.username();
             const password1 = this.password1();
             const password2 = this.password2();
@@ -72,7 +69,7 @@ function SetupModel() {
                 window.location.replace("/");
             });
         }
-        else if (this.setupSyncFromServer()) {
+        else if (this.setupType() === 'sync-from-server') {
             const syncServerHost = this.syncServerHost();
             const syncProxy = this.syncProxy();
             const username = this.username();
@@ -94,7 +91,7 @@ function SetupModel() {
             }
 
             // not using server.js because it loads too many dependencies
-            const resp = await $.post('/api/setup/sync-from-server', {
+            const resp = await $.post('api/setup/sync-from-server', {
                 syncServerHost: syncServerHost,
                 syncProxy: syncProxy,
                 username: username,

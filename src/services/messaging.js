@@ -52,17 +52,26 @@ async function sendMessage(client, message) {
 async function sendMessageToAllClients(message) {
     const jsonStr = JSON.stringify(message);
 
-    log.info("Sending message to all clients: " + jsonStr);
+    if (webSocketServer) {
+        log.info("Sending message to all clients: " + jsonStr);
 
-    webSocketServer.clients.forEach(function each(client) {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(jsonStr);
-        }
-    });
+        webSocketServer.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(jsonStr);
+            }
+        });
+    }
 }
 
 async function sendPing(client, lastSentSyncId) {
     const syncData = await sql.getRows("SELECT * FROM sync WHERE id > ?", [lastSentSyncId]);
+
+    for (const sync of syncData) {
+        if (sync.entityName === 'attributes') {
+            sync.noteId = await sql.getValue(`SELECT noteId FROM attributes WHERE attributeId = ?`, [sync.entityId]);
+        }
+    }
+
     const stats = require('./sync').stats;
 
     await sendMessage(client, {
@@ -72,7 +81,12 @@ async function sendPing(client, lastSentSyncId) {
     });
 }
 
+async function refreshTree() {
+    await sendMessageToAllClients({ type: 'refresh-tree' });
+}
+
 module.exports = {
     init,
-    sendMessageToAllClients
+    sendMessageToAllClients,
+    refreshTree
 };

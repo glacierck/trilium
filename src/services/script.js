@@ -5,37 +5,50 @@ const cls = require('./cls');
 const sourceIdService = require('./source_id');
 const log = require('./log');
 
-async function executeNote(note, originEntity) {
-    if (!note.isJavaScript()) {
+async function executeNote(note, apiParams) {
+    if (!note.isJavaScript() || note.getScriptEnv() !== 'backend' || !note.isContentAvailable) {
+        log.info(`Cannot execute note ${note.noteId}`);
+
         return;
     }
 
     const bundle = await getScriptBundle(note);
 
-    await executeBundle(bundle, note, originEntity);
+    return await executeBundle(bundle, apiParams);
 }
 
-async function executeBundle(bundle, startNote, originEntity = null) {
-    if (!startNote) {
+async function executeNoteNoException(note, apiParams) {
+    try {
+        await executeNote(note, apiParams);
+    }
+    catch (e) {
+        // just swallow, exception is logged already in executeNote
+    }
+}
+
+async function executeBundle(bundle, apiParams = {}) {
+    if (!apiParams.startNote) {
         // this is the default case, the only exception is when we want to preserve frontend startNote
-        startNote = bundle.note;
+        apiParams.startNote = bundle.note;
     }
 
     // last \r\n is necessary if script contains line comment on its last line
     const script = "async function() {\r\n" + bundle.script + "\r\n}";
 
-    const ctx = new ScriptContext(startNote, bundle.allNotes, originEntity);
+    const ctx = new ScriptContext(bundle.allNotes, apiParams);
 
     try {
         if (await bundle.note.hasLabel('manualTransactionHandling')) {
-            return await execute(ctx, script, '');
+            return await execute(ctx, script);
         }
         else {
-            return await sql.transactional(async () => await execute(ctx, script, ''));
+            return await sql.transactional(async () => await execute(ctx, script));
         }
     }
     catch (e) {
         log.error(`Execution of script "${bundle.note.title}" (${bundle.note.noteId}) failed with error: ${e.message}`);
+
+        throw e;
     }
 }
 
@@ -54,14 +67,11 @@ async function executeScript(script, params, startNoteId, currentNoteId, originE
 
     const bundle = await getScriptBundle(currentNote);
 
-    return await executeBundle(bundle, startNote, originEntity);
+    return await executeBundle(bundle, { startNote, originEntity });
 }
 
-async function execute(ctx, script, paramsStr) {
-    // scripts run as "server" sourceId so clients recognize the changes as "foreign" and update themselves
-    cls.namespace.set('sourceId', sourceIdService.getCurrentSourceId());
-
-    return await (function() { return eval(`const apiContext = this;\r\n(${script}\r\n)(${paramsStr})`); }.call(ctx));
+async function execute(ctx, script) {
+    return await (function() { return eval(`const apiContext = this;\r\n(${script}\r\n)()`); }.call(ctx));
 }
 
 function getParams(params) {
@@ -79,7 +89,24 @@ function getParams(params) {
     }).join(",");
 }
 
+async function getScriptBundleForFrontend(note) {
+    const bundle = await getScriptBundle(note);
+
+    // for frontend we return just noteIds because frontend needs to use its own entity instances
+    bundle.noteId = bundle.note.noteId;
+    delete bundle.note;
+
+    bundle.allNoteIds = bundle.allNotes.map(note => note.noteId);
+    delete bundle.allNotes;
+
+    return bundle;
+}
+
 async function getScriptBundle(note, root = true, scriptEnv = null, includedNoteIds = []) {
+    if (!note.isContentAvailable) {
+        return;
+    }
+
     if (!note.isJavaScript() && !note.isHtml()) {
         return;
     }
@@ -130,7 +157,7 @@ apiContext.modules['${note.noteId}'] = {};
 ${root ? 'return ' : ''}await ((async function(exports, module, require, api` + (modules.length > 0 ? ', ' : '') +
             modules.map(child => sanitizeVariableName(child.title)).join(', ') + `) {
 try {
-${note.content};
+${await note.getContent()};
 } catch (e) { throw new Error("Load of script note \\"${note.title}\\" (${note.noteId}) failed with: " + e.message); }
 if (!module.exports) module.exports = {};
 for (const exportKey in exports) module.exports[exportKey] = exports[exportKey];
@@ -139,7 +166,7 @@ for (const exportKey in exports) module.exports[exportKey] = exports[exportKey];
 `;
     }
     else if (note.isHtml()) {
-        bundle.html += note.content;
+        bundle.html += await note.getContent();
     }
 
     return bundle;
@@ -149,14 +176,9 @@ function sanitizeVariableName(str) {
     return str.replace(/[^a-z0-9_]/gim, "");
 }
 
-async function getScriptBundleForNoteId(noteId) {
-    const note = await repository.getNote(noteId);
-    return await getScriptBundle(note);
-}
-
 module.exports = {
     executeNote,
+    executeNoteNoException,
     executeScript,
-    getScriptBundle,
-    getScriptBundleForNoteId
+    getScriptBundleForFrontend
 };

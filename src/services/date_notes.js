@@ -29,6 +29,7 @@ async function getNoteStartingWith(parentNoteId, startsWith) {
                                     AND branches.isDeleted = 0`, [parentNoteId]);
 }
 
+/** @return {Promise<Note>} */
 async function getRootCalendarNote() {
     // some caching here could be useful (e.g. in CLS)
     let rootNote = await attributeService.getNoteWithLabel(CALENDAR_ROOT_LABEL);
@@ -47,8 +48,13 @@ async function getRootCalendarNote() {
     return rootNote;
 }
 
-async function getYearNote(dateTimeStr, rootNote) {
-    const yearStr = dateTimeStr.substr(0, 4);
+/** @return {Promise<Note>} */
+async function getYearNote(dateStr, rootNote) {
+    if (!rootNote) {
+        rootNote = await getRootCalendarNote();
+    }
+
+    const yearStr = dateStr.substr(0, 4);
 
     let yearNote = await attributeService.getNoteWithLabel(YEAR_LABEL, yearStr);
 
@@ -66,21 +72,31 @@ async function getYearNote(dateTimeStr, rootNote) {
     return yearNote;
 }
 
-async function getMonthNote(dateTimeStr, rootNote) {
-    const monthStr = dateTimeStr.substr(0, 7);
-    const monthNumber = dateTimeStr.substr(5, 2);
+async function getMonthNoteTitle(rootNote, monthNumber, dateObj) {
+    const pattern = await rootNote.getLabelValue("monthPattern") || "{monthNumberPadded} - {month}";
+    const monthName = MONTHS[dateObj.getMonth()];
+
+    return pattern
+        .replace(/{monthNumberPadded}/g, monthNumber)
+        .replace(/{month}/g, monthName);
+}
+
+/** @return {Promise<Note>} */
+async function getMonthNote(dateStr, rootNote) {
+    const monthStr = dateStr.substr(0, 7);
+    const monthNumber = dateStr.substr(5, 2);
 
     let monthNote = await attributeService.getNoteWithLabel(MONTH_LABEL, monthStr);
 
     if (!monthNote) {
-        const yearNote = await getYearNote(dateTimeStr, rootNote);
+        const yearNote = await getYearNote(dateStr, rootNote);
 
         monthNote = await getNoteStartingWith(yearNote.noteId, monthNumber);
 
         if (!monthNote) {
-            const dateObj = dateUtils.parseDate(dateTimeStr);
+            const dateObj = dateUtils.parseLocalDate(dateStr);
 
-            const noteTitle = monthNumber + " - " + MONTHS[dateObj.getMonth()];
+            const noteTitle = await getMonthNoteTitle(rootNote, monthNumber, dateObj);
 
             monthNote = await createNote(yearNote.noteId, noteTitle);
         }
@@ -92,36 +108,75 @@ async function getMonthNote(dateTimeStr, rootNote) {
     return monthNote;
 }
 
-async function getDateNote(dateTimeStr) {
+async function getDateNoteTitle(rootNote, dayNumber, dateObj) {
+    const pattern = await rootNote.getLabelValue("datePattern") || "{dayInMonthPadded} - {weekDay}";
+    const weekDay = DAYS[dateObj.getDay()];
+
+    return pattern
+        .replace(/{dayInMonthPadded}/g, dayNumber)
+        .replace(/{weekDay}/g, weekDay)
+        .replace(/{weekDay3}/g, weekDay.substr(0, 3))
+        .replace(/{weekDay2}/g, weekDay.substr(0, 2));
+}
+
+/** @return {Promise<Note>} */
+async function getDateNote(dateStr) {
     const rootNote = await getRootCalendarNote();
 
-    const dateStr = dateTimeStr.substr(0, 10);
-    const dayNumber = dateTimeStr.substr(8, 2);
+    const dayNumber = dateStr.substr(8, 2);
 
     let dateNote = await attributeService.getNoteWithLabel(DATE_LABEL, dateStr);
 
     if (!dateNote) {
-        const monthNote = await getMonthNote(dateTimeStr, rootNote);
+        const monthNote = await getMonthNote(dateStr, rootNote);
 
         dateNote = await getNoteStartingWith(monthNote.noteId, dayNumber);
 
         if (!dateNote) {
-            const dateObj = dateUtils.parseDate(dateTimeStr);
+            const dateObj = dateUtils.parseLocalDate(dateStr);
 
-            const noteTitle = dayNumber + " - " + DAYS[dateObj.getDay()];
+            const noteTitle = await getDateNoteTitle(rootNote, dayNumber, dateObj);
 
             dateNote = await createNote(monthNote.noteId, noteTitle);
         }
 
-        await attributeService.createLabel(dateNote.noteId, DATE_LABEL, dateStr);
+        await attributeService.createLabel(dateNote.noteId, DATE_LABEL, dateStr.substr(0, 10));
     }
 
     return dateNote;
+}
+
+function getStartOfTheWeek(date, startOfTheWeek) {
+    const day = date.getDay();
+    let diff;
+
+    if (startOfTheWeek === 'monday') {
+        diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    }
+    else if (startOfTheWeek === 'sunday') {
+        diff = date.getDate() - day;
+    }
+    else {
+        throw new Error("Unrecognized start of the week " + startOfTheWeek);
+    }
+
+    return new Date(date.setDate(diff));
+}
+
+async function getWeekNote(dateStr, options = {}) {
+    const startOfTheWeek = options.startOfTheWeek || "monday";
+
+    const dateObj = getStartOfTheWeek(dateUtils.parseLocalDate(dateStr), startOfTheWeek);
+
+    dateStr = dateUtils.utcDateStr(dateObj);
+
+    return getDateNote(dateStr);
 }
 
 module.exports = {
     getRootCalendarNote,
     getYearNote,
     getMonthNote,
+    getWeekNote,
     getDateNote
 };

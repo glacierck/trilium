@@ -1,57 +1,73 @@
 import utils from "./utils.js";
 import server from "./server.js";
-import protectedSessionHolder from "./protected_session_holder.js";
-import noteDetailService from "./note_detail.js";
 
-const $component = $('#note-detail-file');
+class NoteDetailFile {
+    /**
+     * @param {TabContext} ctx
+     */
+    constructor(ctx) {
+        this.ctx = ctx;
+        this.$component = ctx.$tabContent.find('.note-detail-file');
+        this.$fileNoteId = ctx.$tabContent.find(".file-note-id");
+        this.$fileName = ctx.$tabContent.find(".file-filename");
+        this.$fileType = ctx.$tabContent.find(".file-filetype");
+        this.$fileSize = ctx.$tabContent.find(".file-filesize");
+        this.$previewRow = ctx.$tabContent.find(".file-preview-row");
+        this.$previewContent = ctx.$tabContent.find(".file-preview-content");
+        this.$downloadButton = ctx.$tabContent.find(".file-download");
+        this.$openButton = ctx.$tabContent.find(".file-open");
 
-const $fileName = $("#file-filename");
-const $fileType = $("#file-filetype");
-const $fileSize = $("#file-filesize");
-const $previewRow = $("#file-preview-row");
-const $previewContent = $("#file-preview-content");
-const $downloadButton = $("#file-download");
-const $openButton = $("#file-open");
+        this.$downloadButton.click(() => utils.download(this.getFileUrl()));
 
-async function show() {
-    const currentNote = noteDetailService.getCurrentNote();
+        this.$openButton.click(() => {
+            if (utils.isElectron()) {
+                const open = require("open");
 
-    const attributes = await server.get('notes/' + currentNote.noteId + '/attributes');
-    const attributeMap = utils.toObject(attributes, l => [l.name, l.value]);
-
-    $component.show();
-
-    $fileName.text(attributeMap.originalFileName || "?");
-    $fileSize.text((attributeMap.fileSize || "?") + " bytes");
-    $fileType.text(currentNote.mime);
-
-    $previewRow.toggle(!!currentNote.content);
-    $previewContent.text(currentNote.content);
-}
-
-$downloadButton.click(() => utils.download(getFileUrl()));
-
-$openButton.click(() => {
-    if (utils.isElectron()) {
-        const open = require("open");
-
-        open(getFileUrl());
+                open(this.getFileUrl());
+            }
+            else {
+                window.location.href = this.getFileUrl();
+            }
+        });
     }
-    else {
-        window.location.href = getFileUrl();
+
+    async render() {
+        const attributes = await server.get('notes/' + this.ctx.note.noteId + '/attributes');
+        const attributeMap = utils.toObject(attributes, l => [l.name, l.value]);
+
+        this.$component.show();
+
+        this.$fileNoteId.text(this.ctx.note.noteId);
+        this.$fileName.text(attributeMap.originalFileName || "?");
+        this.$fileSize.text((attributeMap.fileSize || "?") + " bytes");
+        this.$fileType.text(this.ctx.note.mime);
+
+        if (this.ctx.note.content) {
+            this.$previewRow.show();
+            this.$previewContent.text(this.ctx.note.content);
+        }
+        else {
+            this.$previewRow.hide();
+        }
+
+        // open doesn't work for protected notes since it works through browser which isn't in protected session
+        this.$openButton.toggle(!this.ctx.note.isProtected);
     }
-});
 
-function getFileUrl() {
-    // electron needs absolute URL so we extract current host, port, protocol
-    return utils.getHost() + "/api/notes/" + noteDetailService.getCurrentNoteId()
-        + "/download?protectedSessionId=" + encodeURIComponent(protectedSessionHolder.getProtectedSessionId());
+    getFileUrl() {
+        // electron needs absolute URL so we extract current host, port, protocol
+        return utils.getHost() + "/api/notes/" + this.ctx.note.noteId + "/download";
+    }
+
+    getContent() {}
+
+    focus() {}
+
+    onNoteChange() {}
+
+    cleanup() {}
+
+    scrollToTop() {}
 }
 
-export default {
-    show,
-    getContent: () => null,
-    focus: () => null,
-    onNoteChange: () => null,
-    cleanup: () => null
-}
+export default NoteDetailFile;

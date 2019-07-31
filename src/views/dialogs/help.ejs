@@ -1,0 +1,149 @@
+<div id="help-dialog" class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document" style="min-width: 100%; height: 100%; margin: 0;">
+        <div class="modal-content" style="height: auto;">
+            <div class="modal-header">
+                <h5 class="modal-title mr-auto">Help (full documentation is available <a class="external" href="https://github.com/zadam/trilium/wiki">online</a>)</h5>
+
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" style="overflow: auto; height: calc(100vh - 70px);">
+                <div class="card-columns help-cards">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Note navigation</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>UP/DOWN</kbd> - go up/down in the list of notes</li>
+                                    <li><kbd>LEFT/RIGHT</kbd> - collapse/expand node</li>
+                                    <li><kbd>ALT+LEFT/RIGHT</kbd> - go back / forwards in the history</li>
+                                    <li><kbd>CTRL+J</kbd> - show <a class="external" href="https://github.com/zadam/trilium/wiki/Note-navigation#jump-to-note">"Jump to" dialog</a></li>
+                                    <li><kbd>CTRL+.</kbd> - scroll to active note</li>
+                                    <li><kbd>BACKSPACE</kbd> - jumps to parent note</li>
+                                    <li><kbd>ALT+C</kbd> - collapse whole note tree</li>
+                                    <li><kbd>ALT+-</kbd> (alt with minus sign) - collapse sub-tree</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tab shortcuts</h5>
+
+                            <p class="card-text">
+                            <ul>
+                                <li><kbd>CTRL+click</kbd> (or middle mouse click) on note link opens note in a new tab</li>
+                            </ul>
+
+                            Only in desktop (electron build):
+                            <ul>
+                                <li><kbd>CTRL+T</kbd> opens empty tab</li>
+                                <li><kbd>CTRL+W</kbd> closes active tab</li>
+                                <li><kbd>CTRL+Tab</kbd> activates next tab</li>
+                                <li><kbd>CTRL+Shift+Tab</kbd> activates previous tab</li>
+                            </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Creating notes</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>CTRL+O</kbd> - creates new note after the active note</li>
+                                    <li><kbd>CTRL+P</kbd> - creates new sub-note into active note</li>
+                                    <li><kbd>F2</kbd> - edit <a class="external" href="https://github.com/zadam/trilium/wiki/Tree concepts#prefix">prefix</a> of active note clone</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Moving / cloning notes</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>CTRL+UP/DOWN</kbd> - move note up/down in the note list</li>
+                                    <li><kbd>CTRL+LEFT/RIGHT</kbd> - move note up in the hierarchy</li>
+                                    <li><kbd>SHIFT+UP/DOWN</kbd> - multi-select note above/below</li>
+                                    <li><kbd>CTRL+A</kbd> - select all notes in the current level</li>
+                                    <li><kbd>CTRL+click</kbd> - select note</li>
+                                <li><kbd>CTRL+C</kbd> - copies active note (or current selection) into clipboard (used for <a class="external" href="https://github.com/zadam/trilium/wiki/Cloning notes">cloning</a>)</li>
+                                    <li><kbd>CTRL+X</kbd> - cuts current (or current selection) note into clipboard (used for moving notes)</li>
+                                    <li><kbd>CTRL+V</kbd> - pastes note(s) as sub-note into active note (which is either move or clone depending on whether it was copied or cut into clipboard)</li>
+                                    <li><kbd>DEL</kbd> - delete note / sub-tree</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Editing notes</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>ENTER</kbd> in tree pane switches from tree pane into note title. Enter from note title switches focus to text editor. <kbd>CTRL+.</kbd> switches back from editor to tree pane.</li>
+                                    <li><kbd>CTRL+K</kbd> - create / edit external link</li>
+                                    <li><kbd>CTRL+L</kbd> - create internal link</li>
+                                    <li><kbd>ALT+T</kbd> - inserts current date and time at caret position</li>
+                                    <li><kbd>CTRL+.</kbd> - jump away to the tree pane and scroll to active note</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title"><a class="external" href="https://github.com/zadam/trilium/wiki/Text-editor#autoformat">Markdown-like autoformatting</a></h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>#</kbd>, <kbd>##</kbd>, <kbd>###</kbd> etc. followed by space for headings</li>
+                                    <li><kbd>*</kbd> or <kbd>-</kbd> followed by space for bullet list</li>
+                                    <li><kbd>1.</kbd> or <kbd>1)</kbd> followed by space for numbered list</li>
+                                    <li>start a line with <kbd>&gt;</kbd> followed by space for block quote</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Troubleshooting</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>F5</kbd> or <kbd>CTRL-R</kbd> - reloads Trilium frontend</li>
+                                    <li><kbd>CTRL+SHIFT+I</kbd> - show developer tools</li>
+                                    <li><kbd>ALT+O</kbd> - show SQL console</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Other</h5>
+
+                            <p class="card-text">
+                                <ul>
+                                    <li><kbd>ALT+M</kbd> - distraction-free mode - display only note editor, everything else is hidden</li>
+                                    <li><kbd>CTRL+S</kbd> - toggle search form in tree pane</li>
+                                    <li><kbd>CTRL+F</kbd> - in page search</li>
+                                    <li><kbd>ALT+A</kbd> - show note attributes dialog</li>
+                                </ul>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

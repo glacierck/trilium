@@ -3,10 +3,14 @@
 const electron = require('electron');
 const path = require('path');
 const log = require('./src/services/log');
+const sqlInit = require('./src/services/sql_init');
 const cls = require('./src/services/cls');
 const url = require("url");
 const port = require('./src/services/port');
+const env = require('./src/services/env');
 const appIconService = require('./src/services/app_icon');
+const windowStateKeeper = require('electron-window-state');
+const contextMenu = require('electron-context-menu');
 
 const app = electron.app;
 const globalShortcut = electron.globalShortcut;
@@ -21,6 +25,26 @@ let mainWindow;
 
 require('electron-dl')({ saveAs: true });
 
+contextMenu({
+    menu: (actions, params, browserWindow) => [
+        actions.cut(),
+        actions.copy(),
+        actions.copyLink(),
+        actions.paste(),
+        {
+            label: 'Search DuckDuckGo for “{selection}”',
+            // Only show it when right-clicking text
+            visible: params.selectionText.trim().length > 0,
+            click: () => {
+                const {shell} = require('electron');
+
+                shell.openExternal(`https://duckduckgo.com?q=${encodeURIComponent(params.selectionText)}`);
+            }
+        },
+        actions.inspect()
+    ]
+});
+
 function onClosed() {
     // Dereference the window
     // For multiple windows store them in an array
@@ -28,16 +52,36 @@ function onClosed() {
 }
 
 async function createMainWindow() {
-    const win = new electron.BrowserWindow({
-        // initial window width & height so it's usable on 1600 * 900 display (including some extra panels etc.)
-        width: 1200,
-        height: 800,
-        title: 'Trilium Notes',
-        icon: path.join(__dirname, 'src/public/images/app-icons/png/256x256.png')
+    await sqlInit.dbConnection;
+
+    // if schema doesn't exist -> setup process
+    // if schema exists, then we need to wait until the migration process is finished
+    if (await sqlInit.schemaExists()) {
+        await sqlInit.dbReady;
+    }
+
+    const mainWindowState = windowStateKeeper({
+        // default window width & height so it's usable on 1600 * 900 display (including some extra panels etc.)
+        defaultWidth: 1200,
+        defaultHeight: 800
     });
 
-    win.setMenu(null);
-    win.loadURL('http://localhost:' + await port);
+    const win = new electron.BrowserWindow({
+        x: mainWindowState.x,
+        y: mainWindowState.y,
+        width: mainWindowState.width,
+        height: mainWindowState.height,
+        title: 'Trilium Notes',
+        webPreferences: {
+            nodeIntegration: true
+        },
+        icon: path.join(__dirname, 'images/app-icons/png/256x256' + (env.isDev() ? '-dev' : '') + '.png')
+    });
+
+    mainWindowState.manage(win);
+
+    win.setMenuBarVisibility(false);
+    win.loadURL('http://127.0.0.1:' + await port);
     win.on('closed', onClosed);
 
     win.webContents.on('new-window', (e, url) => {
@@ -52,7 +96,7 @@ async function createMainWindow() {
         const parsedUrl = url.parse(targetUrl);
 
         // we still need to allow internal redirects from setup and migration pages
-        if (parsedUrl.hostname !== 'localhost' || (parsedUrl.path && parsedUrl.path !== '/')) {
+        if (!['localhost', '127.0.0.1'].includes(parsedUrl.hostname) || (parsedUrl.path && parsedUrl.path !== '/')) {
             ev.preventDefault();
         }
     });
@@ -78,15 +122,10 @@ app.on('ready', async () => {
     mainWindow = await createMainWindow();
 
     const result = globalShortcut.register('CommandOrControl+Alt+P', cls.wrap(async () => {
-        const dateNoteService = require('./src/services/date_notes');
-        const dateUtils = require('./src/services/date_utils');
-
-        const parentNote = await dateNoteService.getDateNote(dateUtils.nowDate());
-
         // window may be hidden / not in focus
         mainWindow.focus();
 
-        mainWindow.webContents.send('create-day-sub-note', parentNote.noteId);
+        mainWindow.webContents.send('create-day-sub-note');
     }));
 
     if (!result) {

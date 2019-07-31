@@ -1,90 +1,99 @@
 "use strict";
 
-const sql = require('../../services/sql');
-const noteService = require('../../services/notes');
+const repository = require('../../services/repository');
 const noteCacheService = require('../../services/note_cache');
-const parseFilters = require('../../services/parse_filters');
-const buildSearchQuery = require('../../services/build_search_query');
+const log = require('../../services/log');
+const scriptService = require('../../services/script');
+const searchService = require('../../services/search');
 
 async function searchNotes(req) {
-    const {labelFilters, searchText} = parseFilters(req.params.searchString);
+    const noteIds = await searchService.searchForNoteIds(req.params.searchString);
 
-    let labelFiltersNoteIds = null;
-
-    if (labelFilters.length > 0) {
-        const {query, params} = buildSearchQuery(labelFilters, searchText);
-
-        labelFiltersNoteIds = await sql.getColumn(query, params);
-    }
-
-    let searchTextResults = null;
-
-    if (searchText.trim().length > 0) {
-        searchTextResults = noteCacheService.findNotes(searchText);
-
-        let fullTextNoteIds = await getFullTextResults(searchText);
-
-        for (const noteId of fullTextNoteIds) {
-            if (!searchTextResults.some(item => item.noteId === noteId)) {
-                const result = noteCacheService.getNotePath(noteId);
-
-                if (result) {
-                    searchTextResults.push(result);
-                }
-            }
+    try {
+        return {
+            success: true,
+            results: noteIds.map(noteCacheService.getNotePath).filter(res => !!res)
         }
     }
-
-    let results;
-
-    if (labelFiltersNoteIds && searchTextResults) {
-        results = searchTextResults.filter(item => labelFiltersNoteIds.includes(item.noteId));
+    catch {
+        return {
+            success: false
+        }
     }
-    else if (labelFiltersNoteIds) {
-        results = labelFiltersNoteIds.map(noteCacheService.getNotePath).filter(res => !!res);
+}
+
+async function searchFromNote(req) {
+    const note = await repository.getNote(req.params.noteId);
+
+    if (!note) {
+        return [404, `Note ${req.params.noteId} has not been found.`];
+    }
+
+    if (note.type !== 'search') {
+        return [400, '`Note ${req.params.noteId} is not search note.`']
+    }
+
+    const json = await note.getJsonContent();
+
+    if (!json || !json.searchString) {
+        return [];
+    }
+
+    let noteIds;
+
+    if (json.searchString.startsWith('=')) {
+        const relationName = json.searchString.substr(1).trim();
+
+        noteIds = await searchFromRelation(note, relationName);
     }
     else {
-        results = searchTextResults;
+        noteIds = await searchService.searchForNoteIds(json.searchString);
     }
 
-    return results;
+    // we won't return search note's own noteId
+    noteIds = noteIds.filter(noteId => noteId !== note.noteId);
+
+    return noteIds.map(noteCacheService.getNotePath).filter(res => !!res);
 }
 
-async function getFullTextResults(searchText) {
-    const tokens = searchText.toLowerCase().split(" ");
-    const tokenSql = ["1=1"];
+async function searchFromRelation(note, relationName) {
+    const scriptNote = await note.getRelationTarget(relationName);
 
-    for (const token of tokens) {
-        // FIXME: escape token!
-        tokenSql.push(`(title LIKE '%${token}%' OR content LIKE '%${token}%')`);
+    if (!scriptNote) {
+        log.info(`Search note's relation ${relationName} has not been found.`);
+
+        return [];
     }
 
-    const noteIds = await sql.getColumn(`
-      SELECT DISTINCT noteId 
-      FROM notes 
-      WHERE isDeleted = 0 
-        AND isProtected = 0
-        AND type IN ('text', 'code')
-        AND ${tokenSql.join(' AND ')}`);
+    if (!scriptNote.isJavaScript() || scriptNote.getScriptEnv() !== 'backend') {
+        log.info(`Note ${scriptNote.noteId} is not executable.`);
 
-    return noteIds;
-}
+        return [];
+    }
 
-async function saveSearchToNote(req) {
-    const noteContent = {
-        searchString: req.params.searchString
-    };
+    if (!note.isContentAvailable) {
+        log.info(`Note ${scriptNote.noteId} is not available outside of protected session.`);
 
-    const {note} = await noteService.createNote('root', req.params.searchString, noteContent, {
-        json: true,
-        type: 'search',
-        mime: "application/json"
-    });
+        return [];
+    }
 
-    return { noteId: note.noteId };
+    const result = await scriptService.executeNote(scriptNote, { originEntity: note });
+
+    if (!Array.isArray(result)) {
+        log.info(`Result from ${scriptNote.noteId} is not an array.`);
+
+        return [];
+    }
+
+    if (result.length === 0) {
+        return [];
+    }
+
+    // we expect either array of noteIds (strings) or notes, in that case we extract noteIds ourselves
+    return typeof result[0] === 'string' ? result : result.map(item => item.noteId);
 }
 
 module.exports = {
     searchNotes,
-    saveSearchToNote
+    searchFromNote
 };

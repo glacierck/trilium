@@ -1,267 +1,289 @@
 import treeService from './tree.js';
-import treeUtils from './tree_utils.js';
-import noteTypeService from './note_type.js';
-import protectedSessionService from './protected_session.js';
-import protectedSessionHolder from './protected_session_holder.js';
+import TabContext from './tab_context.js';
 import server from './server.js';
 import messagingService from "./messaging.js";
 import infoService from "./info.js";
 import treeCache from "./tree_cache.js";
 import NoteFull from "../entities/note_full.js";
-import noteDetailCode from './note_detail_code.js';
-import noteDetailText from './note_detail_text.js';
-import noteDetailFile from './note_detail_file.js';
-import noteDetailImage from './note_detail_image.js';
-import noteDetailSearch from './note_detail_search.js';
-import noteDetailRender from './note_detail_render.js';
-import noteDetailRelationMap from './note_detail_relation_map.js';
 import bundleService from "./bundle.js";
-import attributeService from "./attributes.js";
+import utils from "./utils.js";
+import importDialog from "../dialogs/import.js";
+import contextMenuService from "./context_menu.js";
+import treeUtils from "./tree_utils.js";
+import tabRow from "./tab_row.js";
 
-const $noteTitle = $("#note-title");
+const $tabContentsContainer = $("#note-tab-container");
+const $savedIndicator = $(".saved-indicator");
 
-const $noteDetailComponents = $(".note-detail-component");
-
-const $protectButton = $("#protect-button");
-const $unprotectButton = $("#unprotect-button");
-const $noteDetailWrapper = $("#note-detail-wrapper");
-const $noteIdDisplay = $("#note-id-display");
-const $childrenOverview = $("#children-overview");
-const $scriptArea = $("#note-detail-script-area");
-const $savedIndicator = $("#saved-indicator");
-
-let currentNote = null;
-
-let noteChangeDisabled = false;
-
-let isNoteChanged = false;
-
-const components = {
-    'code': noteDetailCode,
-    'text': noteDetailText,
-    'file': noteDetailFile,
-    'image': noteDetailImage,
-    'search': noteDetailSearch,
-    'render': noteDetailRender,
-    'relation-map': noteDetailRelationMap
-};
-
-function getComponent(type) {
-    if (!type) {
-        type = getCurrentNote().type;
-    }
-
-    if (components[type]) {
-        return components[type];
-    }
-    else {
-        infoService.throwError("Unrecognized type: " + type);
-    }
-}
-
-function getCurrentNote() {
-    return currentNote;
-}
-
-function getCurrentNoteId() {
-    return currentNote ? currentNote.noteId : null;
-}
-
-function getCurrentNoteType() {
-    const currentNote = getCurrentNote();
-
-    return currentNote ? currentNote.type : null;
-}
-
-function noteChanged() {
-    if (noteChangeDisabled) {
-        return;
-    }
-
-    isNoteChanged = true;
-
-    $savedIndicator.fadeOut();
-}
+let detailLoadedListeners = [];
 
 async function reload() {
     // no saving here
 
-    await loadNoteDetail(getCurrentNoteId());
+    await loadNoteDetail(getActiveTabContext().notePath);
 }
 
-async function switchToNote(noteId) {
-    if (getCurrentNoteId() !== noteId) {
-        await saveNoteIfChanged();
+async function reloadTab(tabContext) {
+    if (tabContext.note) {
+        const note = await loadNote(tabContext.note.noteId);
 
-        await loadNoteDetail(noteId);
+        await loadNoteDetailToContext(tabContext, note, tabContext.notePath);
     }
 }
 
-function getCurrentNoteContent() {
-    return getComponent().getContent();
+async function reloadAllTabs() {
+    for (const tabContext of tabContexts) {
+        await reloadTab(tabContext);
+    }
+}
+
+async function openInTab(notePath) {
+    await loadNoteDetail(notePath, { newTab: true });
+}
+
+async function switchToNote(notePath) {
+    await saveNotesIfChanged();
+
+    await loadNoteDetail(notePath);
+
+    openTabsChanged();
 }
 
 function onNoteChange(func) {
-    return getComponent().onNoteChange(func);
+    return getActiveTabContext().getComponent().onNoteChange(func);
 }
 
-async function saveNote() {
-    const note = getCurrentNote();
-
-    note.title = $noteTitle.val();
-    note.content = getCurrentNoteContent(note);
-
-    // it's important to set the flag back to false immediatelly after retrieving title and content
-    // otherwise we might overwrite another change (especially async code)
-    isNoteChanged = false;
-
-    treeService.setNoteTitle(note.noteId, note.title);
-
-    await server.put('notes/' + note.noteId, note.dto);
-
-    if (note.isProtected) {
-        protectedSessionHolder.touchProtectedSession();
-    }
-
-    $savedIndicator.fadeIn();
-}
-
-async function saveNoteIfChanged() {
-    if (isNoteChanged) {
-        await saveNote();
+async function saveNotesIfChanged() {
+    for (const ctx of tabContexts) {
+        await ctx.saveNoteIfChanged();
     }
 
     // make sure indicator is visible in a case there was some race condition.
     $savedIndicator.fadeIn();
 }
 
-function setNoteBackgroundIfProtected(note) {
-    $noteDetailWrapper.toggleClass("protected", note.isProtected);
-    $protectButton.toggleClass("active", note.isProtected);
-    $unprotectButton.toggleClass("active", !note.isProtected);
-    $unprotectButton.prop("disabled", !protectedSessionHolder.isProtectedSessionAvailable());
+/** @type {TabContext[]} */
+let tabContexts = [];
+
+function getActiveEditor() {
+    const activeTabContext = getActiveTabContext();
+
+    if (activeTabContext && activeTabContext.note && activeTabContext.note.type === 'text') {
+        return activeTabContext.getComponent().getEditor();
+    }
+    else {
+        return null;
+    }
 }
 
-let isNewNoteCreated = false;
-
-function newNoteCreated() {
-    isNewNoteCreated = true;
-}
-
-async function handleProtectedSession() {
-    const newSessionCreated = await protectedSessionService.ensureProtectedSession(currentNote.isProtected, false);
-
-    if (currentNote.isProtected) {
-        protectedSessionHolder.touchProtectedSession();
+async function activateOrOpenNote(noteId) {
+    for (const tabContext of tabContexts) {
+        if (tabContext.note && tabContext.note.noteId === noteId) {
+            await tabContext.activate();
+            return;
+        }
     }
 
-    // this might be important if we focused on protected note when not in protected note and we got a dialog
-    // to login, but we chose instead to come to another node - at that point the dialog is still visible and this will close it.
-    protectedSessionService.ensureDialogIsClosed();
+    // if no tab with this note has been found we'll create new tab
 
-    return newSessionCreated;
+    await loadNoteDetail(noteId, {
+        newTab: true,
+        activate: true
+    });
 }
 
-async function loadNoteDetail(noteId) {
+function getTabContexts() {
+    return tabContexts;
+}
+
+/** @returns {TabContext} */
+function getActiveTabContext() {
+    const activeTabEl = tabRow.activeTabEl;
+
+    if (!activeTabEl) {
+        return null;
+    }
+
+    const tabId = activeTabEl.getAttribute('data-tab-id');
+
+    return tabContexts.find(tc => tc.tabId === tabId);
+}
+
+/** @return {NoteFull} */
+function getActiveNote() {
+    const activeContext = getActiveTabContext();
+    return activeContext ? activeContext.note : null;
+}
+
+function getActiveNoteId() {
+    const activeNote = getActiveNote();
+
+    return activeNote ? activeNote.noteId : null;
+}
+
+function getActiveNoteType() {
+    const activeNote = getActiveNote();
+
+    return activeNote ? activeNote.type : null;
+}
+
+async function switchToTab(tabId, notePath) {
+    const tabContext = tabContexts.find(tc => tc.tabId === tabId);
+
+    if (!tabContext) {
+        await loadNoteDetail(notePath, {
+            newTab: true,
+            tabId: tabId,
+            activate: true
+        });
+    } else {
+        await tabContext.activate();
+
+        if (notePath && tabContext.notePath !== notePath) {
+            await treeService.activateNote(notePath);
+        }
+    }
+}
+
+async function showTab(tabId) {
+    for (const ctx of tabContexts) {
+        if (ctx.tabId === tabId) {
+            ctx.show();
+        }
+        else {
+            ctx.hide();
+        }
+    }
+
+    const oldActiveNode = treeService.getActiveNode();
+
+    if (oldActiveNode) {
+        oldActiveNode.setActive(false);
+    }
+
+    treeService.clearSelectedNodes();
+
+    const newActiveTabContext = getActiveTabContext();
+
+    if (newActiveTabContext && newActiveTabContext.notePath) {
+        const newActiveNode = await treeService.getNodeFromPath(newActiveTabContext.notePath);
+
+        if (newActiveNode && newActiveNode.isVisible()) {
+            newActiveNode.setActive(true, {noEvents: true});
+        }
+    }
+}
+
+async function renderComponent(ctx) {
+    for (const componentType in ctx.components) {
+        if (componentType !== ctx.note.type) {
+            ctx.components[componentType].cleanup();
+        }
+    }
+
+    ctx.$noteDetailComponents.hide();
+
+    ctx.$noteTitle.show(); // this can be hidden by empty detail
+    ctx.$noteTitle.removeAttr("readonly"); // this can be set by protected session service
+
+    await ctx.getComponent().render();
+}
+
+/**
+ * @param {TabContext} ctx
+ * @param {NoteFull} note
+ */
+async function loadNoteDetailToContext(ctx, note, notePath) {
+    ctx.setNote(note, notePath);
+
+    openTabsChanged();
+
+    if (utils.isDesktop()) {
+        // needs to happen after loading the note itself because it references active noteId
+        ctx.attributes.refreshAttributes();
+    } else {
+        // mobile usually doesn't need attributes so we just invalidate
+        ctx.attributes.invalidateAttributes();
+    }
+
+    ctx.noteChangeDisabled = true;
+
+    try {
+        ctx.$noteTitle.val(ctx.note.title);
+
+        if (utils.isDesktop()) {
+            ctx.noteType.type(ctx.note.type);
+            ctx.noteType.mime(ctx.note.mime);
+        }
+
+        await renderComponent(ctx);
+    } finally {
+        ctx.noteChangeDisabled = false;
+    }
+
+    treeService.setBranchBackgroundBasedOnProtectedStatus(note.noteId);
+
+    // after loading new note make sure editor is scrolled to the top
+    ctx.getComponent().scrollToTop();
+
+    fireDetailLoaded();
+
+    ctx.$scriptArea.empty();
+
+    await bundleService.executeRelationBundles(ctx.note, 'runOnNoteView', ctx);
+
+    if (utils.isDesktop()) {
+        await ctx.attributes.showAttributes();
+
+        await ctx.showChildrenOverview();
+    }
+}
+
+async function loadNoteDetail(origNotePath, options = {}) {
+    const newTab = !!options.newTab;
+    const activate = !!options.activate;
+
+    const notePath = await treeService.resolveNotePath(origNotePath);
+
+    if (!notePath) {
+        console.error(`Cannot resolve note path ${origNotePath}`);
+
+        // fallback to display something
+        if (tabContexts.length === 0) {
+            await openEmptyTab();
+        }
+
+        return;
+    }
+
+    const noteId = treeUtils.getNoteIdFromNotePath(notePath);
     const loadedNote = await loadNote(noteId);
+    let ctx;
+
+    if (!getActiveTabContext() || newTab) {
+        // if it's a new tab explicitly by user then it's in background
+        ctx = new TabContext(tabRow, options.tabId);
+        tabContexts.push(ctx);
+    }
+    else {
+        ctx = getActiveTabContext();
+    }
 
     // we will try to render the new note only if it's still the active one in the tree
     // this is useful when user quickly switches notes (by e.g. holding down arrow) so that we don't
     // try to render all those loaded notes one after each other. This only guarantees that correct note
     // will be displayed independent of timing
-    const currentTreeNode = treeService.getCurrentNode();
-    if (currentTreeNode && currentTreeNode.data.noteId !== loadedNote.noteId) {
+    const currentTreeNode = treeService.getActiveNode();
+    if (!newTab && currentTreeNode && currentTreeNode.data.noteId !== loadedNote.noteId) {
         return;
     }
 
-    // only now that we're in sync with tree active node we will switch currentNote
-    currentNote = loadedNote;
+    await loadNoteDetailToContext(ctx, loadedNote, notePath);
 
-    // needs to happend after loading the note itself because it references current noteId
-    attributeService.refreshAttributes();
-
-    if (isNewNoteCreated) {
-        isNewNoteCreated = false;
-
-        $noteTitle.focus().select();
+    if (activate) {
+        // will also trigger showTab via event
+        await tabRow.activateTab(ctx.$tab[0]);
     }
-
-    $noteIdDisplay.html(noteId);
-
-    setNoteBackgroundIfProtected(currentNote);
-
-    $noteDetailWrapper.show();
-
-    noteChangeDisabled = true;
-
-    try {
-        $noteTitle.val(currentNote.title);
-
-        noteTypeService.setNoteType(currentNote.type);
-        noteTypeService.setNoteMime(currentNote.mime);
-
-        for (const componentType in components) {
-            if (componentType !== currentNote.type) {
-                components[componentType].cleanup();
-            }
-        }
-
-        $noteDetailComponents.hide();
-
-        const newSessionCreated = await handleProtectedSession();
-        if (newSessionCreated) {
-            // in such case we're reloading note anyway so no need to continue here.
-            return;
-        }
-
-        await getComponent(currentNote.type).show();
-    }
-    finally {
-        noteChangeDisabled = false;
-    }
-
-    treeService.setBranchBackgroundBasedOnProtectedStatus(noteId);
-
-    // after loading new note make sure editor is scrolled to the top
-    $noteDetailWrapper.scrollTop(0);
-
-    $scriptArea.empty();
-
-    await bundleService.executeRelationBundles(getCurrentNote(), 'runOnNoteView');
-
-    await attributeService.showAttributes();
-
-    await showChildrenOverview();
-}
-
-async function showChildrenOverview() {
-    const note = getCurrentNote();
-    const attributes = await attributeService.getAttributes();
-    const hideChildrenOverview = attributes.some(attr => attr.type === 'label' && attr.name === 'hideChildrenOverview')
-        || note.type === 'relation-map'
-        || note.type === 'image'
-        || note.type === 'file';
-
-    if (hideChildrenOverview) {
-        $childrenOverview.hide();
-        return;
-    }
-
-    $childrenOverview.empty();
-
-    const notePath = treeService.getCurrentNotePath();
-
-    for (const childBranch of await note.getChildBranches()) {
-        const link = $('<a>', {
-            href: 'javascript:',
-            text: await treeUtils.getNoteTitle(childBranch.noteId, childBranch.parentNoteId)
-        }).attr('data-action', 'note').attr('data-note-path', notePath + '/' + childBranch.noteId);
-
-        const childEl = $('<div class="child-overview">').html(link);
-        $childrenOverview.append(childEl);
-    }
-
-    $childrenOverview.show();
 }
 
 async function loadNote(noteId) {
@@ -270,49 +292,279 @@ async function loadNote(noteId) {
     return new NoteFull(treeCache, row);
 }
 
+async function filterTabs(noteId) {
+    for (const tc of tabContexts) {
+        if (tc.notePath && !tc.notePath.split("/").includes(noteId)) {
+            await tabRow.removeTab(tc.$tab[0]);
+        }
+    }
+
+    if (tabContexts.length === 0) {
+        await loadNoteDetail(noteId, {
+            newTab: true,
+            activate: true
+        });
+    }
+
+    await saveOpenTabs();
+}
+
+async function noteDeleted(noteId) {
+    for (const tc of tabContexts) {
+        if (tc.notePath && tc.notePath.split("/").includes(noteId)) {
+            await tabRow.removeTab(tc.$tab[0]);
+        }
+    }
+}
+
+async function refreshTabs(sourceTabId, noteId) {
+    for (const tc of tabContexts) {
+        if (tc.noteId === noteId && tc.tabId !== sourceTabId) {
+            await reloadTab(tc);
+        }
+    }
+}
+
 function focusOnTitle() {
-    $noteTitle.focus();
+    getActiveTabContext().$noteTitle.focus();
+}
+
+function focusAndSelectTitle() {
+    getActiveTabContext().$noteTitle.focus().select();
+}
+
+/**
+ * Since detail loading may take some time and user might just browse through the notes using UP-DOWN keys,
+ * we intentionally decouple activation of the note in the tree and full load of the note so just avaiting on
+ * fancytree's activate() won't wait for the full load.
+ *
+ * This causes an issue where in some cases you want to do some action after detail is loaded. For this reason
+ * we provide the listeners here which will be triggered after the detail is loaded and if the loaded note
+ * is the one registered in the listener.
+ */
+function addDetailLoadedListener(noteId, callback) {
+    detailLoadedListeners.push({ noteId, callback });
+}
+
+function fireDetailLoaded() {
+    for (const {noteId, callback} of detailLoadedListeners) {
+        if (noteId === getActiveNoteId()) {
+            callback();
+        }
+    }
+
+    // all the listeners are one time only
+    detailLoadedListeners = [];
 }
 
 messagingService.subscribeToSyncMessages(syncData => {
-    if (syncData.some(sync => sync.entityName === 'notes' && sync.entityId === getCurrentNoteId())) {
-        infoService.showMessage('Reloading note because of background changes');
+    const noteIdsToRefresh = new Set();
 
-        reload();
+    syncData
+        .filter(sync => sync.entityName === 'notes')
+        .forEach(sync => noteIdsToRefresh.add(sync.entityId));
+
+    syncData
+        .filter(sync => sync.entityName === 'attributes')
+        .forEach(sync => noteIdsToRefresh.add(sync.noteId));
+
+    for (const noteId of noteIdsToRefresh) {
+        refreshTabs(null, noteId);
     }
 });
 
-$(document).ready(() => {
-    $noteTitle.on('input', () => {
-        noteChanged();
+$tabContentsContainer.on("dragover", e => e.preventDefault());
 
-        const title = $noteTitle.val();
+$tabContentsContainer.on("dragleave", e => e.preventDefault());
 
-        treeService.setNoteTitle(getCurrentNoteId(), title);
+$tabContentsContainer.on("drop", e => {
+    const activeNote = getActiveNote();
+
+    if (!activeNote) {
+        return;
+    }
+
+    importDialog.uploadFiles(activeNote.noteId, e.originalEvent.dataTransfer.files, {
+        safeImport: true,
+        shrinkImages: true,
+        textImportedAsText: true,
+        codeImportedAsCode: true,
+        explodeArchives: true
+    });
+});
+
+async function openEmptyTab(render = true) {
+    const ctx = new TabContext(tabRow);
+    tabContexts.push(ctx);
+
+    if (render) {
+        await renderComponent(ctx);
+    }
+
+    await tabRow.activateTab(ctx.$tab[0]);
+}
+
+tabRow.addListener('newTab', openEmptyTab);
+
+tabRow.addListener('activeTabChange', async ({ detail }) => {
+    const tabId = detail.tabEl.getAttribute('data-tab-id');
+
+    await showTab(tabId);
+
+    console.log(`Activated tab ${tabId}`);
+});
+
+tabRow.addListener('tabRemove', async ({ detail }) => {
+    const tabId = detail.tabEl.getAttribute('data-tab-id');
+
+    const tabContextToDelete = tabContexts.find(nc => nc.tabId === tabId);
+
+    if (tabContextToDelete) {
+        // sometimes there are orphan autocompletes after closing the tab
+        tabContextToDelete.closeAutocomplete();
+
+        await tabContextToDelete.saveNoteIfChanged();
+        tabContextToDelete.$tabContent.remove();
+    }
+
+    tabContexts = tabContexts.filter(nc => nc.tabId !== tabId);
+
+    console.log(`Removed tab ${tabId}`);
+
+    if (tabContexts.length === 0) {
+        openEmptyTab();
+    }
+});
+
+$(tabRow.el).on('contextmenu', '.note-tab', e => {
+    const tab = $(e.target).closest(".note-tab");
+
+    contextMenuService.initContextMenu(e, {
+        getContextMenuItems: () => {
+            return [
+                {title: "Close all tabs", cmd: "removeAllTabs", uiIcon: "empty"},
+                {title: "Close all tabs except for this", cmd: "removeAllTabsExceptForThis", uiIcon: "empty"}
+            ];
+        },
+        selectContextMenuItem: (e, cmd) => {
+            if (cmd === 'removeAllTabs') {
+                tabRow.removeAllTabs();
+            } else if (cmd === 'removeAllTabsExceptForThis') {
+                tabRow.removeAllTabsExceptForThis(tab[0]);
+            }
+        }
+    });
+});
+
+if (utils.isElectron()) {
+    utils.bindShortcut('ctrl+t', () => {
+        openEmptyTab();
     });
 
-    noteDetailText.focus();
-});
+    utils.bindShortcut('ctrl+w', () => {
+        if (tabRow.activeTabEl) {
+            tabRow.removeTab(tabRow.activeTabEl);
+        }
+    });
+
+    utils.bindShortcut('ctrl+tab', () => {
+        const nextTab = tabRow.nextTabEl;
+
+        if (nextTab) {
+            tabRow.activateTab(nextTab);
+        }
+    });
+
+    utils.bindShortcut('ctrl+shift+tab', () => {
+        const prevTab = tabRow.previousTabEl;
+
+        if (prevTab) {
+            tabRow.activateTab(prevTab);
+        }
+    });
+}
+
+tabRow.addListener('activeTabChange', openTabsChanged);
+tabRow.addListener('tabRemove', openTabsChanged);
+tabRow.addListener('tabReorder', openTabsChanged);
+
+let tabsChangedTaskId = null;
+
+function clearOpenTabsTask() {
+    if (tabsChangedTaskId) {
+        clearTimeout(tabsChangedTaskId);
+    }
+}
+
+function openTabsChanged() {
+    // we don't want to send too many requests with tab changes so we always schedule task to do this in 3 seconds,
+    // but if there's any change in between, we cancel the old one and schedule new one
+    // so effectively we kind of wait until user stopped e.g. quickly switching tabs
+    clearOpenTabsTask();
+
+    tabsChangedTaskId = setTimeout(saveOpenTabs, 3000);
+}
+
+async function saveOpenTabs() {
+    const activeTabEl = tabRow.activeTabEl;
+    const openTabs = [];
+
+    for (const tabEl of tabRow.tabEls) {
+        const tabId = tabEl.getAttribute('data-tab-id');
+        const tabContext = tabContexts.find(tc => tc.tabId === tabId);
+
+        if (tabContext && tabContext.notePath) {
+            openTabs.push({
+                tabId: tabContext.tabId,
+                notePath: tabContext.notePath,
+                active: activeTabEl === tabEl
+            });
+        }
+    }
+
+    await server.put('options', {
+        openTabs: JSON.stringify(openTabs)
+    });
+}
+
+function noteChanged() {
+    const activeTabContext = getActiveTabContext();
+
+    if (activeTabContext) {
+        activeTabContext.noteChanged();
+    }
+}
 
 // this makes sure that when user e.g. reloads the page or navigates away from the page, the note's content is saved
 // this sends the request asynchronously and doesn't wait for result
-$(window).on('beforeunload', () => { saveNoteIfChanged(); }); // don't convert to short form, handler doesn't like returned promise
+$(window).on('beforeunload', () => { saveNotesIfChanged(); }); // don't convert to short form, handler doesn't like returned promise
 
-setInterval(saveNoteIfChanged, 3000);
+setInterval(saveNotesIfChanged, 3000);
 
 export default {
     reload,
+    reloadAllTabs,
+    openInTab,
     switchToNote,
-    setNoteBackgroundIfProtected,
     loadNote,
-    getCurrentNote,
-    getCurrentNoteType,
-    getCurrentNoteId,
-    newNoteCreated,
+    loadNoteDetail,
+    getActiveNote,
+    getActiveNoteType,
+    getActiveNoteId,
     focusOnTitle,
-    saveNote,
-    saveNoteIfChanged,
-    noteChanged,
-    getCurrentNoteContent,
-    onNoteChange
+    focusAndSelectTitle,
+    saveNotesIfChanged,
+    onNoteChange,
+    addDetailLoadedListener,
+    switchToTab,
+    getTabContexts,
+    getActiveTabContext,
+    getActiveEditor,
+    activateOrOpenNote,
+    clearOpenTabsTask,
+    filterTabs,
+    openEmptyTab,
+    noteDeleted,
+    refreshTabs,
+    noteChanged
 };

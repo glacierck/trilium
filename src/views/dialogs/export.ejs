@@ -2,13 +2,17 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Export note</h5>
+                <h5 class="modal-title">Export note "<span class="export-note-title"></span>"</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <form id="export-form">
                 <div class="modal-body">
+                    <div id="export-progress-count-wrapper" class="alert alert-primary" style="padding: 15px;">
+                        <strong>Note export progress count:</strong> <span id="export-progress-count"></span>
+                    </div>
+
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="export-type" id="export-type-subtree" value="subtree">
                         <label class="form-check-label" for="export-type-subtree">this note and all of its descendants</label>
@@ -36,6 +40,18 @@
                                 OPML - outliner interchange format for text only. Formatting, images and files are not included.
                             </label>
                         </div>
+
+                        <div id="opml-versions">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="opml-version" id="opml-v1" value="1.0">
+                                <label class="form-check-label" for="opml-v1">OPML v1.0 - plain text only</label>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="opml-version" id="opml-v2" value="2.0">
+                                <label class="form-check-label" for="opml-v2">OMPL v2.0 - allows also HTML</label>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-check">
@@ -59,7 +75,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary btn-sm">Export</button>
+                    <button class="btn btn-primary" id="export-button">Export</button>
                 </div>
             </form>
         </div>

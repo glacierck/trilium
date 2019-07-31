@@ -39,10 +39,12 @@ app.use((req, res, next) => {
     });
 });
 
-app.use(bodyParser.json({limit: '50mb'}));
+app.use(bodyParser.json({limit: '500mb'}));
 app.use(bodyParser.urlencoded({extended: false}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/libraries', express.static(path.join(__dirname, '..', 'libraries')));
+app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 const sessionParser = session({
     secret: sessionSecret,
     resave: false, // true forces the session to be saved back to the session store, even if the session was never modified during the request.
@@ -59,9 +61,23 @@ const sessionParser = session({
 });
 app.use(sessionParser);
 
-app.use(favicon(__dirname + '/public/images/app-icons/win/icon.ico'));
+app.use(favicon(__dirname + '/../images/app-icons/win/icon.ico'));
 
 require('./routes/routes').register(app);
+
+require('./routes/custom').register(app);
+
+app.use((err, req, res, next) => {
+    if (err.code !== 'EBADCSRFTOKEN') {
+        return next(err);
+    }
+
+    log.error(`Invalid CSRF token: ${req.headers['x-csrf-token']}, secret: ${req.cookies['_csrf']}`);
+
+    err = new Error('Invalid CSRF token');
+    err.status = 403;
+    next(err);
+});
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {
@@ -72,7 +88,12 @@ app.use((req, res, next) => {
 
 // error handler
 app.use((err, req, res, next) => {
-    log.info(err);
+    if (err && err.message && err.message.includes("Invalid package")) {
+        // electron 6 outputs a lot of such errors which do not seem important
+    }
+    else {
+        log.info(err);
+    }
 
     res.status(err.status || 500);
     res.send({

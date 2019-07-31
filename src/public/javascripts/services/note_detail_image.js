@@ -1,75 +1,83 @@
 import utils from "./utils.js";
-import protectedSessionHolder from "./protected_session_holder.js";
-import noteDetailService from "./note_detail.js";
 import infoService from "./info.js";
 import server from "./server.js";
 
-const $component = $('#note-detail-image');
-const $imageWrapper = $('#note-detail-image-wrapper');
-const $imageView = $('#note-detail-image-view');
+class NoteDetailImage {
+    /**
+     * @param {TabContext} ctx
+     */
+    constructor(ctx) {
+        this.ctx = ctx;
+        this.$component = ctx.$tabContent.find('.note-detail-image');
+        this.$imageWrapper = ctx.$tabContent.find('.note-detail-image-wrapper');
+        this.$imageView = ctx.$tabContent.find('.note-detail-image-view');
+        this.$copyToClipboardButton = ctx.$tabContent.find(".image-copy-to-clipboard");
+        this.$fileName = ctx.$tabContent.find(".image-filename");
+        this.$fileType = ctx.$tabContent.find(".image-filetype");
+        this.$fileSize = ctx.$tabContent.find(".image-filesize");
 
-const $imageDownloadButton = $("#image-download");
-const $copyToClipboardButton = $("#image-copy-to-clipboard");
-const $fileName = $("#image-filename");
-const $fileType = $("#image-filetype");
-const $fileSize = $("#image-filesize");
+        this.$imageDownloadButton = ctx.$tabContent.find(".image-download");
+        this.$imageDownloadButton.click(() => utils.download(this.getFileUrl()));
 
-async function show() {
-    const currentNote = noteDetailService.getCurrentNote();
+        this.$copyToClipboardButton.click(() => {
+            this.$imageWrapper.attr('contenteditable','true');
 
-    const attributes = await server.get('notes/' + currentNote.noteId + '/attributes');
-    const attributeMap = utils.toObject(attributes, l => [l.name, l.value]);
+            try {
+                this.selectImage(this.$imageWrapper.get(0));
 
-    $component.show();
+                const success = document.execCommand('copy');
 
-    $fileName.text(attributeMap.originalFileName || "?");
-    $fileSize.text((attributeMap.fileSize || "?") + " bytes");
-    $fileType.text(currentNote.mime);
-
-    $imageView.prop("src", `/api/images/${currentNote.noteId}/${currentNote.title}`);
-}
-
-$imageDownloadButton.click(() => utils.download(getFileUrl()));
-
-function selectImage(element) {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    selection.removeAllRanges();
-    selection.addRange(range);
-}
-
-$copyToClipboardButton.click(() => {
-    $imageWrapper.attr('contenteditable','true');
-
-    try {
-        selectImage($imageWrapper.get(0));
-
-        const success = document.execCommand('copy');
-
-        if (success) {
-            infoService.showMessage("Image copied to the clipboard");
-        }
-        else {
-            infoService.showAndLogError("Could not copy the image to clipboard.");
-        }
+                if (success) {
+                    infoService.showMessage("Image copied to the clipboard");
+                }
+                else {
+                    infoService.showAndLogError("Could not copy the image to clipboard.");
+                }
+            }
+            finally {
+                window.getSelection().removeAllRanges();
+                this.$imageWrapper.removeAttr('contenteditable');
+            }
+        });
     }
-    finally {
-        window.getSelection().removeAllRanges();
-        $imageWrapper.removeAttr('contenteditable');
+
+    async render() {
+        const attributes = await server.get('notes/' + this.ctx.note.noteId + '/attributes');
+        const attributeMap = utils.toObject(attributes, l => [l.name, l.value]);
+
+        this.$component.show();
+
+        this.$fileName.text(attributeMap.originalFileName || "?");
+        this.$fileSize.text((attributeMap.fileSize || "?") + " bytes");
+        this.$fileType.text(this.ctx.note.mime);
+
+        this.$imageView.prop("src", `api/images/${this.ctx.note.noteId}/${this.ctx.note.title}`);
     }
-});
 
-function getFileUrl() {
-    // electron needs absolute URL so we extract current host, port, protocol
-    return utils.getHost() + "/api/notes/" + noteDetailService.getCurrentNoteId()
-        + "/download?protectedSessionId=" + encodeURIComponent(protectedSessionHolder.getProtectedSessionId());
+    selectImage(element) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    getFileUrl() {
+        // electron needs absolute URL so we extract current host, port, protocol
+        return utils.getHost() + `/api/notes/${this.ctx.note.noteId}/download`;
+    }
+
+    getContent() {}
+
+    focus() {}
+
+    onNoteChange() {}
+
+    cleanup() {}
+
+    scrollToTop() {
+        this.$component.scrollTop(0);
+    }
 }
 
-export default {
-    show,
-    getContent: () => null,
-    focus: () => null,
-    onNoteChange: () => null,
-    cleanup: () => null
-}
+export default NoteDetailImage

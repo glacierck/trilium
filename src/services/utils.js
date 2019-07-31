@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const randtoken = require('rand-token').generator({source: 'crypto'});
 const unescape = require('unescape');
 const escape = require('escape-html');
+const sanitize = require("sanitize-filename");
 
 function newEntityId() {
     return randomString(12);
@@ -49,7 +50,17 @@ function isEmptyOrWhitespace(str) {
 
 function sanitizeSql(str) {
     // should be improved or usage eliminated
-    return str.replace(/'/g, "\\'");
+    return str.replace(/'/g, "''");
+}
+
+function prepareSqlForLike(prefix, str, suffix) {
+    const value = str
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "''")
+        .replace(/_/g, "\\_")
+        .replace(/%/g, "\\%");
+
+    return `'${prefix}${value}${suffix}' ESCAPE '\\'`;
 }
 
 async function stopWatch(what, func) {
@@ -57,7 +68,7 @@ async function stopWatch(what, func) {
 
     const ret = await func();
 
-    const tookMs = new Date().getTime() - start.getTime();
+    const tookMs = Date.now() - start.getTime();
 
     console.log(`${what} took ${tookMs}ms`);
 
@@ -127,6 +138,22 @@ function crash() {
     }
 }
 
+function sanitizeFilenameForHeader(filename) {
+    let sanitizedFilename = sanitize(filename);
+
+    if (sanitizedFilename.trim().length === 0) {
+        sanitizedFilename = "file";
+    }
+
+    return encodeURIComponent(sanitizedFilename)
+}
+
+function getContentDisposition(filename) {
+    const sanitizedFilename = sanitizeFilenameForHeader(filename);
+
+    return `file; filename="${sanitizedFilename}"; filename*=UTF-8''${sanitizedFilename}`;
+}
+
 module.exports = {
     randomSecureToken,
     randomString,
@@ -139,6 +166,7 @@ module.exports = {
     hash,
     isEmptyOrWhitespace,
     sanitizeSql,
+    prepareSqlForLike,
     stopWatch,
     escapeHtml,
     unescapeHtml,
@@ -147,5 +175,7 @@ module.exports = {
     intersection,
     union,
     escapeRegExp,
-    crash
+    crash,
+    sanitizeFilenameForHeader,
+    getContentDisposition
 };

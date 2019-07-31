@@ -36,6 +36,10 @@ const DIR_NAME = 'trilium-data';
 
 function getTriliumDataDir() {
     if (process.env.TRILIUM_DATA_DIR) {
+        if (!fs.existsSync(process.env.TRILIUM_DATA_DIR)) {
+            fs.mkdirSync(process.env.TRILIUM_DATA_DIR, 0o700);
+        }
+
         return process.env.TRILIUM_DATA_DIR;
     }
 
@@ -55,10 +59,6 @@ function getTriliumDataDir() {
 }
 
 const TRILIUM_DATA_DIR =  getTriliumDataDir();
-
-// not necessary to log this since if we have logs we already know where data dir is.
-console.log("Using data dir:", TRILIUM_DATA_DIR);
-
 const DOCUMENT_PATH = TRILIUM_DATA_DIR + "/document.db";
 const BACKUP_DIR = TRILIUM_DATA_DIR + "/backup";
 const LOG_DIR = TRILIUM_DATA_DIR + "/log";

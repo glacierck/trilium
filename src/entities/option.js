@@ -9,8 +9,8 @@ const dateUtils = require('../services/date_utils');
  * @param {string} name
  * @param {string} value
  * @param {boolean} isSynced
- * @param {string} dateModified
- * @param {string} dateCreated
+ * @param {string} utcDateModified
+ * @param {string} utcDateCreated
  *
  * @extends Entity
  */
@@ -26,10 +26,14 @@ class Option extends Entity {
     }
 
     beforeSaving() {
+        if (!this.utcDateCreated) {
+            this.utcDateCreated = dateUtils.utcNowDateTime();
+        }
+
         super.beforeSaving();
 
         if (this.isChanged) {
-            this.dateModified = dateUtils.nowDate();
+            this.utcDateModified = dateUtils.utcNowDateTime();
         }
     }
 }

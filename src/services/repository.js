@@ -37,29 +37,44 @@ async function getEntity(query, params = []) {
     return entityConstructor.createEntityFromRow(row);
 }
 
-/** @returns {Note|null} */
+/** @returns {Promise<Note|null>} */
 async function getNote(noteId) {
     return await getEntity("SELECT * FROM notes WHERE noteId = ?", [noteId]);
 }
 
-/** @returns {Branch|null} */
+/** @returns {Promise<Note[]>} */
+async function getNotes(noteIds) {
+    // this note might be optimised, but remember that it must keep the existing order of noteIds
+    // (important e.g. for @orderBy in search)
+    const notes = [];
+
+    for (const noteId of noteIds) {
+        const note = await getNote(noteId);
+
+        notes.push(note);
+    }
+
+    return notes;
+}
+
+/** @returns {Promise<Branch|null>} */
 async function getBranch(branchId) {
     return await getEntity("SELECT * FROM branches WHERE branchId = ?", [branchId]);
 }
 
-/** @returns {Image|null} */
-async function getImage(imageId) {
-    return await getEntity("SELECT * FROM images WHERE imageId = ?", [imageId]);
-}
-
-/** @returns {Attribute|null} */
+/** @returns {Promise<Attribute|null>} */
 async function getAttribute(attributeId) {
     return await getEntity("SELECT * FROM attributes WHERE attributeId = ?", [attributeId]);
 }
 
-/** @returns {Option|null} */
+/** @returns {Promise<Option|null>} */
 async function getOption(name) {
     return await getEntity("SELECT * FROM options WHERE name = ?", [name]);
+}
+
+/** @returns {Promise<Link|null>} */
+async function getLink(linkId) {
+    return await getEntity("SELECT * FROM links WHERE linkId = ?", [linkId]);
 }
 
 async function updateEntity(entity) {
@@ -90,13 +105,14 @@ async function updateEntity(entity) {
     }
 
     await sql.transactional(async () => {
-        await sql.replace(entityName, clone);
+        await sql.upsert(entityName, primaryKeyName, clone);
 
         const primaryKey = entity[primaryKeyName];
 
-        if (entity.isChanged && (entityName !== 'options' || entity.isSynced)) {
-
-            await syncTableService.addEntitySync(entityName, primaryKey);
+        if (entity.isChanged) {
+            if (entityName !== 'options' || entity.isSynced) {
+                await syncTableService.addEntitySync(entityName, primaryKey);
+            }
 
             if (!cls.isEntityEventsDisabled()) {
                 const eventPayload = {
@@ -112,6 +128,10 @@ async function updateEntity(entity) {
                 await eventService.emit(entity.isDeleted ? eventService.ENTITY_DELETED : eventService.ENTITY_CHANGED, eventPayload);
             }
         }
+
+        if (entity.afterSaving) {
+            await entity.afterSaving();
+        }
     });
 }
 
@@ -120,10 +140,11 @@ module.exports = {
     getEntities,
     getEntity,
     getNote,
+    getNotes,
     getBranch,
-    getImage,
     getAttribute,
     getOption,
+    getLink,
     updateEntity,
     setEntityConstructor
 };
