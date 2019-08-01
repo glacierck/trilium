@@ -2,16 +2,12 @@ import messagingService from "./messaging.js";
 import utils from "./utils.js";
 
 function showMessage(message) {
-    console.log(utils.now(), "message: ", message);
+    console.debug(utils.now(), "message: ", message);
 
     $.notify({
-        // options
+        icon: 'jam jam-check',
         message: message
-    }, {
-        // options
-        type: 'success',
-        delay: 3000
-    });
+    }, getNotifySettings('success', 3000));
 }
 
 function showAndLogError(message, delay = 10000) {
@@ -25,12 +21,26 @@ function showError(message, delay = 10000) {
 
     $.notify({
         // options
+        icon: 'jam jam-alert',
         message: message
-    }, {
-        // options
-        type: 'danger',
+    }, getNotifySettings('danger', delay));
+}
+
+function getNotifySettings(type, delay) {
+    return {
+        element: 'body',
+        type: type,
+        z_index: 90000,
+        placement: {
+            from: "top",
+            align: "center"
+        },
+        animate: {
+            enter: 'animated fadeInDown',
+            exit: 'animated fadeOutUp'
+        },
         delay: delay
-    });
+    };
 }
 
 function throwError(message) {

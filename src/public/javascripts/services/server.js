@@ -1,21 +1,23 @@
-import protectedSessionHolder from './protected_session_holder.js';
 import utils from './utils.js';
 import infoService from "./info.js";
 
+const REQUEST_LOGGING_ENABLED = false;
+
 function getHeaders() {
-    let protectedSessionId = null;
-
-    try { // this is because protected session might not be declared in some cases
-        protectedSessionId = protectedSessionHolder.getProtectedSessionId();
-    }
-    catch(e) {}
-
     // headers need to be lowercase because node.js automatically converts them to lower case
     // so hypothetical protectedSessionId becomes protectedsessionid on the backend
-    return {
-        protected_session_id: protectedSessionId,
-        source_id: glob.sourceId
+    // also avoiding using underscores instead of dashes since nginx filters them out by default
+    const headers = {
+        'trilium-source-id': glob.sourceId,
+        'x-csrf-token': glob.csrfToken
     };
+
+    if (utils.isElectron()) {
+        // passing it explicitely here because of the electron HTTP bypass
+        headers.cookie = document.cookie;
+    }
+
+    return headers;
 }
 
 async function get(url) {
@@ -45,7 +47,9 @@ async function call(method, url, data) {
         return new Promise((resolve, reject) => {
             reqResolves[requestId] = resolve;
 
-            console.log(utils.now(), "Request #" + requestId + " to " + method + " " + url);
+            if (REQUEST_LOGGING_ENABLED) {
+                console.log(utils.now(), "Request #" + requestId + " to " + method + " " + url);
+            }
 
             ipc.send('server-request', {
                 requestId: requestId,
@@ -89,7 +93,9 @@ if (utils.isElectron()) {
     const ipc = require('electron').ipcRenderer;
 
     ipc.on('server-response', (event, arg) => {
-        console.log(utils.now(), "Response #" + arg.requestId + ": " + arg.statusCode);
+        if (REQUEST_LOGGING_ENABLED) {
+            console.log(utils.now(), "Response #" + arg.requestId + ": " + arg.statusCode);
+        }
 
         reqResolves[arg.requestId](arg.body);
 

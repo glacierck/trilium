@@ -4,6 +4,7 @@ const sqlInit = require('./sql_init');
 const optionService = require('./options');
 const fs = require('fs-extra');
 const log = require('./log');
+const utils = require('./utils');
 const resourceDir = require('./resource_dir');
 
 async function migrate() {
@@ -63,7 +64,8 @@ async function migrate() {
                     throw new Error("Unknown migration type " + mig.type);
                 }
 
-                await optionService.setOption("dbVersion", mig.dbVersion);
+                // not using repository because of changed utcDateModified column in migration 129
+                await sql.execute(`UPDATE options SET value = ? WHERE name = ?`, [mig.dbVersion, "dbVersion"]);
             });
 
             log.info("Migration to version " + mig.dbVersion + " has been successful.");
@@ -72,7 +74,7 @@ async function migrate() {
             log.error("error during migration to version " + mig.dbVersion + ": " + e.stack);
             log.error("migration failed, crashing hard"); // this is not very user friendly :-/
 
-            process.exit(1);
+            utils.crash();
         }
         finally {
             // make sure foreign keys are enabled even if migration script disables them

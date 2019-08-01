@@ -5,9 +5,10 @@ import server from '../services/server.js';
 import infoService from "../services/info.js";
 import zoomService from "../services/zoom.js";
 import utils from "../services/utils.js";
+import cssLoader from "../services/css_loader.js";
+import optionsInit from "../services/options_init.js";
 
 const $dialog = $("#options-dialog");
-const $tabs = $("#options-tabs");
 
 const tabHandlers = [];
 
@@ -16,16 +17,13 @@ function addTabHandler(handler) {
 }
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
     const options = await server.get('options');
 
-    $dialog.dialog({
-        modal: true,
-        width: 900
-    });
-
-    $tabs.tabs();
+    $dialog.modal();
 
     for (const handler of tabHandlers) {
         if (handler.optionsLoaded) {
@@ -48,12 +46,31 @@ export default {
 addTabHandler((function() {
     const $themeSelect = $("#theme-select");
     const $zoomFactorSelect = $("#zoom-factor-select");
+    const $oneTabDisplaySelect = $("#one-tab-display-select");
     const $leftPaneMinWidth = $("#left-pane-min-width");
     const $leftPaneWidthPercent = $("#left-pane-width-percent");
-    const $html = $("html");
+    const $mainFontSize = $("#main-font-size");
+    const $treeFontSize = $("#tree-font-size");
+    const $detailFontSize = $("#detail-font-size");
+    const $body = $("body");
     const $container = $("#container");
 
-    function optionsLoaded(options) {
+    async function optionsLoaded(options) {
+        const themes = [
+            { val: 'white', title: 'White' },
+            { val: 'dark', title: 'Dark' },
+            { val: 'black', title: 'Black' }
+        ].concat(await server.get('options/user-themes'));
+
+        $themeSelect.empty();
+
+        for (const theme of themes) {
+            $themeSelect.append($("<option>")
+                .attr("value", theme.val)
+                .attr("data-note-id", theme.noteId)
+                .html(theme.title));
+        }
+
         $themeSelect.val(options.theme);
 
         if (utils.isElectron()) {
@@ -63,23 +80,39 @@ addTabHandler((function() {
             $zoomFactorSelect.prop('disabled', true);
         }
 
+        $oneTabDisplaySelect.val(options.hideTabRowForOneTab === 'true' ? 'hide' : 'show');
+
         $leftPaneMinWidth.val(options.leftPaneMinWidth);
         $leftPaneWidthPercent.val(options.leftPaneWidthPercent);
+
+        $mainFontSize.val(options.mainFontSize);
+        $treeFontSize.val(options.treeFontSize);
+        $detailFontSize.val(options.detailFontSize);
     }
 
     $themeSelect.change(function() {
         const newTheme = $(this).val();
 
-        $html.attr("class", "theme-" + newTheme);
+        for (const clazz of Array.from($body[0].classList)) { // create copy to safely iterate over while removing classes
+            if (clazz.startsWith("theme-")) {
+                $body.removeClass(clazz);
+            }
+        }
+
+        const noteId = $(this).find(":selected").attr("data-note-id");
+
+        if (noteId) {
+            // make sure the CSS is loaded
+            // if the CSS has been loaded and then updated then the changes won't take effect though
+            cssLoader.requireCss(`/api/notes/download/${noteId}`);
+        }
+
+        $body.addClass("theme-" + newTheme);
 
         server.put('options/theme/' + newTheme);
     });
 
-    $zoomFactorSelect.change(function() {
-        const newZoomFactor = $(this).val();
-
-        zoomService.setZoomFactorAndSave(newZoomFactor);
-    });
+    $zoomFactorSelect.change(function() { zoomService.setZoomFactorAndSave($(this).val()); });
 
     function resizeLeftPanel() {
         const leftPanePercent = parseInt($leftPaneWidthPercent.val());
@@ -89,20 +122,49 @@ addTabHandler((function() {
         $container.css("grid-template-columns", `minmax(${leftPaneMinWidth}px, ${leftPanePercent}fr) ${rightPanePercent}fr`);
     }
 
-    $leftPaneMinWidth.change(function() {
-        const newMinWidth = $(this).val();
+    $oneTabDisplaySelect.change(function() {
+        const hideTabRowForOneTab = $(this).val() === 'hide' ? 'true' : 'false';
 
-        resizeLeftPanel();
-
-        server.put('options/leftPaneMinWidth/' + newMinWidth);
+        server.put('options/hideTabRowForOneTab/' + hideTabRowForOneTab)
+            .then(optionsInit.loadOptions);
     });
 
-    $leftPaneWidthPercent.change(function() {
-        const newWidthPercent = $(this).val();
+    $leftPaneMinWidth.change(async function() {
+        await server.put('options/leftPaneMinWidth/' + $(this).val());
 
         resizeLeftPanel();
+    });
 
-        server.put('options/leftPaneWidthPercent/' + newWidthPercent);
+    $leftPaneWidthPercent.change(async function() {
+        await server.put('options/leftPaneWidthPercent/' + $(this).val());
+
+        resizeLeftPanel();
+    });
+
+    function applyFontSizes() {
+        console.log($mainFontSize.val() + "% !important");
+
+        $body.get(0).style.setProperty("--main-font-size", $mainFontSize.val() + "%");
+        $body.get(0).style.setProperty("--tree-font-size", $treeFontSize.val() + "%");
+        $body.get(0).style.setProperty("--detail-font-size", $detailFontSize.val() + "%");
+    }
+
+    $mainFontSize.change(async function() {
+        await server.put('options/mainFontSize/' + $(this).val());
+
+        applyFontSizes();
+    });
+
+    $treeFontSize.change(async function() {
+        await server.put('options/treeFontSize/' + $(this).val());
+
+        applyFontSizes();
+    });
+
+    $detailFontSize.change(async function() {
+        await server.put('options/detailFontSize/' + $(this).val());
+
+        applyFontSizes();
     });
 
     return {
@@ -168,7 +230,7 @@ addTabHandler((function() {
         const protectedSessionTimeout = $protectedSessionTimeout.val();
 
         saveOptions({ 'protectedSessionTimeout': protectedSessionTimeout }).then(() => {
-            protectedSessionHolder.setProtectedSessionTimeout(protectedSessionTimeout);
+            optionsInit.loadOptions();
         });
 
         return false;
@@ -196,25 +258,6 @@ addTabHandler((function () {
     return {
         optionsLoaded
     };
-})());
-
-addTabHandler((async function () {
-    const $appVersion = $("#app-version");
-    const $dbVersion = $("#db-version");
-    const $syncVersion = $("#sync-version");
-    const $buildDate = $("#build-date");
-    const $buildRevision = $("#build-revision");
-
-    const appInfo = await server.get('app-info');
-
-    $appVersion.html(appInfo.appVersion);
-    $dbVersion.html(appInfo.dbVersion);
-    $syncVersion.html(appInfo.syncVersion);
-    $buildDate.html(appInfo.buildDate);
-    $buildRevision.html(appInfo.buildRevision);
-    $buildRevision.attr('href', 'https://github.com/zadam/trilium/commit/' + appInfo.buildRevision);
-
-    return {};
 })());
 
 addTabHandler((function() {

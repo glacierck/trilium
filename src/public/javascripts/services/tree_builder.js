@@ -4,13 +4,22 @@ import Branch from "../entities/branch.js";
 import server from "./server.js";
 import treeCache from "./tree_cache.js";
 import messagingService from "./messaging.js";
+import hoistedNoteService from "./hoisted_note.js";
 
-async function prepareTree(noteRows, branchRows, relations) {
-    utils.assertArguments(noteRows, branchRows, relations);
+async function prepareTree() {
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
 
-    treeCache.load(noteRows, branchRows, relations);
+    let hoistedBranch;
 
-    return [ await prepareNode(await treeCache.getBranch('root')) ];
+    if (hoistedNoteId === 'root') {
+        hoistedBranch = await treeCache.getBranch('root');
+    }
+    else {
+        const hoistedNote = await treeCache.getNote(hoistedNoteId);
+        hoistedBranch = (await hoistedNote.getBranches())[0];
+    }
+
+    return [ await prepareNode(hoistedBranch) ];
 }
 
 async function prepareBranch(note) {
@@ -22,9 +31,47 @@ async function prepareBranch(note) {
     }
 }
 
+async function getIcon(note) {
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
+
+    if (note.noteId === 'root') {
+        return "jam jam-chevrons-right";
+    }
+    else if (note.noteId === hoistedNoteId) {
+        return "jam jam-arrow-up";
+    }
+    else if (note.type === 'text') {
+        if (note.hasChildren()) {
+            return "jam jam-folder";
+        }
+        else {
+            return "jam jam-file";
+        }
+    }
+    else if (note.type === 'file') {
+        return "jam jam-attachment"
+    }
+    else if (note.type === 'image') {
+        return "jam jam-picture"
+    }
+    else if (note.type === 'code') {
+        return "jam jam-terminal"
+    }
+    else if (note.type === 'render') {
+        return "jam jam-play"
+    }
+    else if (note.type === 'search') {
+        return "jam jam-search-folder"
+    }
+    else if (note.type === 'relation-map') {
+        return "jam jam-map"
+    }
+}
+
 async function prepareNode(branch) {
     const note = await branch.getNote();
     const title = (branch.prefix ? (branch.prefix + " - ") : "") + note.title;
+    const hoistedNoteId = await hoistedNoteService.getHoistedNoteId();
 
     const node = {
         noteId: note.noteId,
@@ -33,19 +80,15 @@ async function prepareNode(branch) {
         isProtected: note.isProtected,
         title: utils.escapeHtml(title),
         extraClasses: await getExtraClasses(note),
+        icon: await getIcon(note),
         refKey: note.noteId,
-        expanded: note.type !== 'search' && branch.isExpanded
+        expanded: branch.isExpanded || hoistedNoteId === note.noteId,
+        lazy: true,
+        key: utils.randomString(12) // this should prevent some "duplicate key" errors
     };
 
     if (note.hasChildren() || note.type === 'search') {
         node.folder = true;
-
-        if (node.expanded && note.type !== 'search') {
-            node.children = await prepareRealBranch(note);
-        }
-        else {
-            node.lazy = true;
-        }
     }
 
     return node;
@@ -73,9 +116,7 @@ async function prepareRealBranch(parentNote) {
 }
 
 async function prepareSearchBranch(note) {
-    const fullNote = await noteDetailService.loadNote(note.noteId);
-    const results = (await server.get('search/' + encodeURIComponent(fullNote.jsonContent.searchString)))
-        .filter(res => res.noteId !== note.noteId); // this is necessary because title of the search note is often the same as the search text which would match and create circle
+    const results = await server.get('search-note/' + note.noteId);
 
     // force to load all the notes at once instead of one by one
     await treeCache.getNotes(results.map(res => res.noteId));
@@ -94,17 +135,13 @@ async function prepareSearchBranch(note) {
         treeCache.addBranch(branch);
     }
 
-    return await prepareRealBranch(fullNote);
+    return await prepareRealBranch(note);
 }
 
 async function getExtraClasses(note) {
     utils.assertArguments(note);
 
     const extraClasses = [];
-
-    if (note.noteId === 'root') {
-        extraClasses.push("tree-root");
-    }
 
     if (note.isProtected) {
         extraClasses.push("protected");
@@ -118,7 +155,11 @@ async function getExtraClasses(note) {
         extraClasses.push(note.cssClass);
     }
 
-    extraClasses.push(note.type);
+    extraClasses.push(utils.getNoteTypeClass(note.type));
+
+    if (note.mime) { // some notes should not have mime type (e.g. render)
+        extraClasses.push(utils.getMimeTypeClass(note.mime));
+    }
 
     return extraClasses.join(" ");
 }
@@ -126,5 +167,6 @@ async function getExtraClasses(note) {
 export default {
     prepareTree,
     prepareBranch,
-    getExtraClasses
+    getExtraClasses,
+    getIcon
 }

@@ -111,6 +111,12 @@ async function sortNotesAlphabetically(parentNoteId) {
 }
 
 async function setNoteToParent(noteId, prefix, parentNoteId) {
+    const parentNote = await repository.getNote(parentNoteId);
+
+    if (parentNote && parentNote.isDeleted) {
+        throw new Error(`Cannot move note to deleted parent note ${parentNoteId}`);
+    }
+
     // case where there might be more such branches is ignored. It's expected there should be just one
     const branch = await repository.getEntity("SELECT * FROM branches WHERE isDeleted = 0 AND noteId = ? AND prefix = ?", [noteId, prefix]);
 
@@ -126,6 +132,12 @@ async function setNoteToParent(noteId, prefix, parentNoteId) {
         await branch.save();
     }
     else if (parentNoteId) {
+        const note = await repository.getNote(noteId);
+
+        if (note.isDeleted) {
+            throw new Error(`Cannot create a branch for ${noteId} which is deleted.`);
+        }
+
         await new Branch({
             noteId: noteId,
             parentNoteId: parentNoteId,

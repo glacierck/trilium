@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Trilium Notes</title>
+</head>
+<body class="desktop theme-<%= theme %>" style="--main-font-size: <%= mainFontSize %>%; --tree-font-size: <%= treeFontSize %>%; --detail-font-size: <%= detailFontSize %>%;">
+<noscript>Trilium requires JavaScript to be enabled.</noscript>
+<div id="container" style="display: none; grid-template-columns: minmax(<%= leftPaneMinWidth %>px, <%= leftPaneWidthPercent %>fr) minmax(0, <%= rightPaneWidthPercent %>fr)">
+    <div id="header" class="hide-toggle">
+        <div id="history-navigation" style="display: none;">
+            <a id="history-back-button" title="Go to previous note." class="icon-action jam jam-arrow-square-left"></a>
+
+            &nbsp;
+
+            <a id="history-forward-button" title="Go to next note." class="icon-action jam jam-arrow-square-right"></a>
+        </div>
+
+        <div style="flex-grow: 100; display: flex;">
+            <button class="btn btn-sm" id="jump-to-note-dialog-button" title="CTRL+J">
+                <span class="jam jam-direction"></span>
+                Jump to note
+            </button>
+
+            <button class="btn btn-sm" id="recent-changes-button">
+                <span class="jam jam-history"></span>
+
+                Recent changes
+            </button>
+
+            <button class="btn btn-sm" id="enter-protected-session-button" title="Enter protected session to be able to find and view protected notes">
+                <span class="jam jam-door"></span>
+
+                Enter protected session
+            </button>
+
+            <button class="btn btn-sm" id="leave-protected-session-button" title="Leave protected session so that protected notes are not accessible any more." style="display: none;">
+                <span class="jam jam-log-out"></span>
+
+                Leave protected session
+            </button>
+        </div>
+
+        <div id="plugin-buttons">
+        </div>
+
+        <div>
+            <div class="dropdown" id="global-menu">
+                <button type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-sm dropdown-toggle">
+                    <span class="jam jam-align-justify"></span>
+                    Menu
+                    <span class="caret"></span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-right">
+                    <a class="dropdown-item" id="options-button">
+                        <span class="jam jam-settings-alt"></span>
+                        Options
+                    </a>
+
+                    <a class="dropdown-item" id="sync-now-button" title="Trigger sync">
+                        <span class="jam jam-refresh"></span>
+                        Sync (<span id="outstanding-syncs-count">0</span>)
+                    </a>
+
+                    <a class="dropdown-item" id="open-dev-tools-button">
+                        <span class="jam jam-terminal"></span>
+                        Open Dev Tools
+                        <kbd>CTRL+SHIFT+I</kbd>
+                    </a>
+
+                    <a class="dropdown-item" id="open-sql-console-button">
+                        <span class="jam jam-database"></span>
+                        Open SQL Console
+                        <kbd>ALT+O</kbd>
+                    </a>
+
+                    <a class="dropdown-item" id="reload-frontend-button" title="Reload can help with some visual glitches without restarting the whole app.">
+                        <span class="jam jam-empty"></span>
+                        Reload frontend
+                        <kbd>CTRL-R</kbd>
+                    </a>
+
+                    <a class="dropdown-item" id="toggle-fullscreen-button">
+                        <span class="jam jam-empty"></span>
+                        Toggle fullscreen
+                        <kbd>F11</kbd>
+                    </a>
+
+                    <a class="dropdown-item" id="show-help-button">
+                        <span class="jam jam-help"></span>
+                        Show Help
+                        <kbd>F1</kbd>
+                    </a>
+
+                    <a class="dropdown-item" id="show-about-dialog-button">
+                        <span class="jam jam-empty"></span>
+                        About Trilium Notes
+                    </a>
+
+                    <a class="dropdown-item" id="logout-button">
+                        <span class="jam jam-log-out"></span>
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="left-pane" class="hide-toggle">
+        <div id="global-buttons">
+            <a id="create-top-level-note-button" title="Create new top level note" class="icon-action jam jam-plus-circle"></a>
+
+            <a id="collapse-tree-button" title="Collapse note tree. Shortcut ALT+C" class="icon-action jam jam-layers"></a>
+
+            <a id="scroll-to-active-note-button" title="Scroll to active note. Shortcut CTRL+." class="icon-action jam jam-download"></a>
+
+            <a id="toggle-search-button" title="Search in notes. Shortcut CTRL+S" class="icon-action jam jam-search"></a>
+        </div>
+
+        <div id="search-box">
+            <div class="form-group">
+                <div class="input-group">
+                    <input name="search-text" id="search-text" class="form-control"
+                           placeholder="Search text, labels" autocomplete="off">
+
+                    <div class="input-group-append">
+                        <button id="do-search-button" class="btn btn-sm icon-button jam jam-search" title="Search (enter)"></button>
+                    </div>
+                </div>
+            </div>
+
+
+            <div style="display: flex; align-items: center; justify-content: space-evenly; flex-wrap: wrap;">
+                <button id="save-search-button" class="btn btn-sm"
+                    title="This will create new saved search note under active note.">
+                    <span class="jam jam-save"></span> Save search</button>
+
+                <button id="close-search-button" class="btn btn-sm"><span class="jam jam-close"></span> Close search</button>
+            </div>
+        </div>
+
+        <div id="search-results">
+            <strong>Search results:</strong>
+
+            <ul id="search-results-inner"></ul>
+        </div>
+
+        <div id="tree"></div>
+
+        <div class="dropdown-menu dropdown-menu-sm" id="context-menu-container"></div>
+    </div>
+
+    <% include tabs.ejs %>
+
+    <% include dialogs/about.ejs %>
+    <% include dialogs/add_link.ejs %>
+    <% include dialogs/attributes.ejs %>
+    <% include dialogs/branch_prefix.ejs %>
+    <% include dialogs/event_log.ejs %>
+    <% include dialogs/export.ejs %>
+    <% include dialogs/import.ejs %>
+    <% include dialogs/jump_to_note.ejs %>
+    <% include dialogs/markdown_import.ejs %>
+    <% include dialogs/note_revisions.ejs %>
+    <% include dialogs/note_source.ejs %>
+    <% include dialogs/options.ejs %>
+    <% include dialogs/protected_session_password.ejs %>
+    <% include dialogs/recent_changes.ejs %>
+    <% include dialogs/sql_console.ejs %>
+    <% include dialogs/info.ejs %>
+    <% include dialogs/prompt.ejs %>
+    <% include dialogs/confirm.ejs %>
+    <% include dialogs/help.ejs %>
+    <% include dialogs/note_info.ejs %>
+    <% include dialogs/link_map.ejs %>
+</div>
+
+<script type="text/javascript">
+    window.baseApiUrl = 'api/';
+    window.device = "desktop";
+    window.glob = {
+        activeDialog: null,
+        sourceId: '<%= sourceId %>',
+        maxSyncIdAtLoad: <%= maxSyncIdAtLoad %>,
+        instanceName: '<%= instanceName %>',
+        csrfToken: '<%= csrfToken %>'
+    };
+    window.appCssNoteIds = <%- JSON.stringify(appCssNoteIds) %>;
+</script>
+
+<!-- Required for correct loading of scripts in Electron -->
+<script>if (typeof module === 'object') {window.module = module; module = undefined;}</script>
+
+<script src="libraries/jquery.min.js"></script>
+
+<link href="libraries/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<script src="libraries/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+<script src="libraries/bootstrap-notify.min.js"></script>
+
+<!-- Include Fancytree skin and library -->
+<link href="libraries/fancytree/skin-win8/ui.fancytree.css" rel="stylesheet">
+<script src="libraries/fancytree/jquery.fancytree-all-deps.js"></script>
+
+<script src="libraries/jquery.hotkeys.js"></script>
+<script src="libraries/jquery.fancytree.hotkeys.js"></script>
+
+<script src="libraries/knockout.min.js"></script>
+
+<script src="libraries/autocomplete.jquery.min.js"></script>
+
+<script src="libraries/dayjs.min.js"></script>
+
+<link href="stylesheets/themes.css" rel="stylesheet">
+<link href="stylesheets/style.css" rel="stylesheet">
+<link href="stylesheets/desktop.css" rel="stylesheet">
+
+<script src="javascripts/desktop.js" crossorigin type="module"></script>
+
+<link rel="stylesheet" type="text/css" href="libraries/jam/css/jam.min.css">
+
+<script type="text/javascript">
+    // we hide container initally because otherwise it is rendered first without CSS and then flickers into
+    // final form which is pretty ugly.
+    $("#container").show();
+</script>
+</body>
+</html>

@@ -1,8 +1,9 @@
 "use strict";
 
-const utils = require('./utils');
-const Image = require('../entities/image');
-const NoteImage = require('../entities/note_image');
+const repository = require('./repository');
+const log = require('./log');
+const protectedSessionService = require('./protected_session');
+const noteService = require('./notes');
 const imagemin = require('imagemin');
 const imageminMozJpeg = require('imagemin-mozjpeg');
 const imageminPngQuant = require('imagemin-pngquant');
@@ -11,28 +12,59 @@ const jimp = require('jimp');
 const imageType = require('image-type');
 const sanitizeFilename = require('sanitize-filename');
 
-async function saveImage(file, noteId) {
-    const resizedImage = await resize(file.buffer);
-    const optimizedImage = await optimize(resizedImage);
+async function saveImage(buffer, originalName, parentNoteId, shrinkImageSwitch) {
+    const origImageFormat = imageType(buffer);
 
-    const imageFormat = imageType(optimizedImage);
+    if (origImageFormat.ext === "webp") {
+        // JIMP does not support webp at the moment: https://github.com/oliver-moran/jimp/issues/144
+        shrinkImageSwitch = false;
+    }
 
-    const fileNameWithouExtension = file.originalname.replace(/\.[^/.]+$/, "");
-    const fileName = sanitizeFilename(fileNameWithouExtension + "." + imageFormat.ext);
+    const finalImageBuffer = shrinkImageSwitch ? await shrinkImage(buffer, originalName) : buffer;
 
-    const image = await new Image({
-        format: imageFormat.ext,
-        name: fileName,
-        checksum: utils.hash(optimizedImage),
-        data: optimizedImage
-    }).save();
+    const imageFormat = imageType(finalImageBuffer);
 
-    await new NoteImage({
-        noteId: noteId,
-        imageId: image.imageId
-    }).save();
+    const parentNote = await repository.getNote(parentNoteId);
 
-    return {fileName, imageId: image.imageId};
+    const fileName = sanitizeFilename(originalName);
+
+    const {note} = await noteService.createNote(parentNoteId, fileName, finalImageBuffer, {
+        target: 'into',
+        type: 'image',
+        isProtected: parentNote.isProtected && protectedSessionService.isProtectedSessionAvailable(),
+        mime: 'image/' + imageFormat.ext.toLowerCase(),
+        attributes: [
+            { type: 'label', name: 'originalFileName', value: originalName },
+            { type: 'label', name: 'fileSize', value: finalImageBuffer.byteLength }
+        ]
+    });
+
+    return {
+        fileName,
+        note,
+        noteId: note.noteId,
+        url: `api/images/${note.noteId}/${fileName}`
+    };
+}
+
+async function shrinkImage(buffer, originalName) {
+    const resizedImage = await resize(buffer);
+    let finalImageBuffer;
+
+    try {
+        finalImageBuffer = await optimize(resizedImage);
+    } catch (e) {
+        log.error("Failed to optimize image '" + originalName + "'\nStack: " + e.stack);
+        finalImageBuffer = resizedImage;
+    }
+
+    // if resizing & shrinking did not help with size then save the original
+    // (can happen when e.g. resizing PNG into JPEG)
+    if (finalImageBuffer.byteLength >= buffer.byteLength) {
+        finalImageBuffer = buffer;
+    }
+
+    return finalImageBuffer;
 }
 
 const MAX_SIZE = 1000;
@@ -57,15 +89,7 @@ async function resize(buffer) {
     // when converting PNG to JPG we lose alpha channel, this is replaced by white to match Trilium white background
     image.background(0xFFFFFFFF);
 
-    // getBuffer doesn't support promises so this workaround
-    return await new Promise((resolve, reject) => image.getBuffer(jimp.MIME_JPEG, (err, data) => {
-        if (err) {
-            reject(err);
-        }
-        else {
-            resolve(data);
-        }
-    }));
+    return image.getBufferAsync(jimp.MIME_JPEG);
 }
 
 async function optimize(buffer) {
@@ -75,7 +99,7 @@ async function optimize(buffer) {
                 quality: 50
             }),
             imageminPngQuant({
-                quality: "0-70"
+                quality: [0, 0.7]
             }),
             imageminGifLossy({
                 lossy: 80,

@@ -1,13 +1,13 @@
 import noteDetailService from "./note_detail.js";
-import utils from "./utils.js";
 import treeChangesService from "./branches.js";
-import contextMenuService from "./tree_context_menu.js";
 import treeService from "./tree.js";
 import editBranchPrefixDialog from "../dialogs/branch_prefix.js";
+import hoistedNoteService from "./hoisted_note.js";
+import clipboard from "./clipboard.js";
 
 const keyBindings = {
     "del": node => {
-        treeChangesService.deleteNodes(treeService.getSelectedNodes(true));
+        treeChangesService.deleteNodes(treeService.getSelectedOrActiveNodes(node));
     },
     "ctrl+up": node => {
         const beforeNode = node.getPrevSibling();
@@ -19,7 +19,7 @@ const keyBindings = {
         return false;
     },
     "ctrl+down": node => {
-        let afterNode = node.getNextSibling();
+        const afterNode = node.getNextSibling();
         if (afterNode !== null) {
             treeChangesService.moveAfterNode([node], afterNode);
         }
@@ -32,7 +32,7 @@ const keyBindings = {
         return false;
     },
     "ctrl+right": node => {
-        let toNode = node.getPrevSibling();
+        const toNode = node.getPrevSibling();
 
         if (toNode !== null) {
             treeChangesService.moveToNode([node], toNode);
@@ -40,9 +40,19 @@ const keyBindings = {
 
         return false;
     },
-    "shift+up": node => {
-        node.navigate($.ui.keyCode.UP, true).then(() => {
-            const currentNode = treeService.getCurrentNode();
+    "shift+up": () => {
+        const node = treeService.getFocusedNode();
+
+        if (!node) {
+            return;
+        }
+
+        if (node.isActive()) {
+            node.setSelected(true);
+        }
+
+        node.navigate($.ui.keyCode.UP, false).then(() => {
+            const currentNode = treeService.getFocusedNode();
 
             if (currentNode.isSelected()) {
                 node.setSelected(false);
@@ -53,9 +63,19 @@ const keyBindings = {
 
         return false;
     },
-    "shift+down": node => {
-        node.navigate($.ui.keyCode.DOWN, true).then(() => {
-            const currentNode = treeService.getCurrentNode();
+    "shift+down": () => {
+        const node = treeService.getFocusedNode();
+
+        if (!node) {
+            return;
+        }
+
+        if (node.isActive()) {
+            node.setSelected(true);
+        }
+
+        node.navigate($.ui.keyCode.DOWN, false).then(() => {
+            const currentNode = treeService.getFocusedNode();
 
             if (currentNode.isSelected()) {
                 node.setSelected(false);
@@ -84,18 +104,18 @@ const keyBindings = {
 
         return false;
     },
-    "ctrl+c": () => {
-        contextMenuService.copy(treeService.getSelectedNodes());
+    "ctrl+c": node => {
+        clipboard.copy(treeService.getSelectedOrActiveNodes(node));
 
         return false;
     },
-    "ctrl+x": () => {
-        contextMenuService.cut(treeService.getSelectedNodes());
+    "ctrl+x": node => {
+        clipboard.cut(treeService.getSelectedOrActiveNodes(node));
 
         return false;
     },
     "ctrl+v": node => {
-        contextMenuService.pasteInto(node);
+        clipboard.pasteInto(node);
 
         return false;
     },
@@ -104,10 +124,22 @@ const keyBindings = {
 
         return false;
     },
-    "backspace": node => {
-        if (!utils.isRootNode(node)) {
+    "backspace": async node => {
+        if (!await hoistedNoteService.isRootNode(node)) {
             node.getParent().setActive().then(treeService.clearSelectedNodes);
         }
+    },
+    "ctrl+h": node => {
+        hoistedNoteService.getHoistedNoteId().then(hoistedNoteId => {
+            if (node.data.noteId === hoistedNoteId) {
+                hoistedNoteService.unhoist();
+            }
+            else {
+                hoistedNoteService.setHoistedNoteId(node.data.noteId);
+            }
+        });
+
+        return false;
     },
     // code below shouldn't be necessary normally, however there's some problem with interaction with context menu plugin
     // after opening context menu, standard shortcuts don't work, but they are detected here

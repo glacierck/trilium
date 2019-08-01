@@ -10,6 +10,9 @@ const appInfo = require('../../services/app_info');
 const eventService = require('../../services/events');
 const cls = require('../../services/cls');
 const sqlInit = require('../../services/sql_init');
+const sql = require('../../services/sql');
+const optionService = require('../../services/options');
+const ApiToken = require('../../entities/api_token');
 
 async function loginSync(req) {
     if (!await sqlInit.schemaExists()) {
@@ -22,14 +25,15 @@ async function loginSync(req) {
 
     const now = new Date();
 
-    if (Math.abs(timestamp.getTime() - now.getTime()) > 5000) {
+    // login token is valid for 5 minutes
+    if (Math.abs(timestamp.getTime() - now.getTime()) > 5 * 60 * 1000) {
         return [400, { message: 'Auth request time is out of sync' }];
     }
 
     const syncVersion = req.body.syncVersion;
 
     if (syncVersion !== appInfo.syncVersion) {
-        return [400, { message: 'Non-matching sync versions, local is version ' + appInfo.syncVersion }];
+        return [400, { message: `Non-matching sync versions, local is version ${appInfo.syncVersion}, remote is ${syncVersion}. It is recommended to run same version of Trilium on both sides of sync.` }];
     }
 
     const documentSecret = await options.getOption('documentSecret');
@@ -44,7 +48,8 @@ async function loginSync(req) {
     req.session.loggedIn = true;
 
     return {
-        sourceId: sourceIdService.getCurrentSourceId()
+        sourceId: sourceIdService.getCurrentSourceId(),
+        maxSyncId: await sql.getValue("SELECT MAX(id) FROM sync")
     };
 }
 
@@ -73,7 +78,28 @@ async function loginToProtectedSession(req) {
     };
 }
 
+async function token(req) {
+    const username = req.body.username;
+    const password = req.body.password;
+
+    const isUsernameValid = username === await optionService.getOption('username');
+    const isPasswordValid = await passwordEncryptionService.verifyPassword(password);
+
+    if (!isUsernameValid || !isPasswordValid) {
+        return [401, "Incorrect username/password"];
+    }
+
+    const apiToken = await new ApiToken({
+        token: utils.randomSecureToken()
+    }).save();
+
+    return {
+        token: apiToken.token
+    };
+}
+
 module.exports = {
     loginSync,
-    loginToProtectedSession
+    loginToProtectedSession,
+    token
 };

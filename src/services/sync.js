@@ -1,7 +1,6 @@
 "use strict";
 
 const log = require('./log');
-const rp = require('request-promise');
 const sql = require('./sql');
 const sqlInit = require('./sql_init');
 const optionService = require('./options');
@@ -14,6 +13,7 @@ const appInfo = require('./app_info');
 const syncOptions = require('./sync_options');
 const syncMutexService = require('./sync_mutex');
 const cls = require('./cls');
+const request = require('./request');
 
 let proxyToggle = true;
 
@@ -49,7 +49,11 @@ async function sync() {
     catch (e) {
         proxyToggle = !proxyToggle;
 
-        if (e.message.indexOf('ECONNREFUSED') !== -1) {
+        if (e.message &&
+                (e.message.includes('ECONNREFUSED') ||
+                 e.message.includes('ERR_CONNECTION_REFUSED') ||
+                 e.message.includes('Bad Gateway'))) {
+
             log.info("No connection to sync server.");
 
             return {
@@ -58,7 +62,7 @@ async function sync() {
             };
         }
         else {
-            log.info("sync failed: " + e.message);
+            log.info("sync failed: " + e.message + e.stack);
 
             return {
                 success: false,
@@ -79,12 +83,12 @@ async function login() {
 }
 
 async function doLogin() {
-    const timestamp = dateUtils.nowDate();
+    const timestamp = dateUtils.utcNowDateTime();
 
     const documentSecret = await optionService.getOption('documentSecret');
     const hash = utils.hmac(documentSecret, timestamp);
 
-    const syncContext = { cookieJar: rp.jar() };
+    const syncContext = { cookieJar: {} };
 
     const resp = await syncRequest(syncContext, 'POST', '/api/login/sync', {
         timestamp: timestamp,
@@ -97,6 +101,16 @@ async function doLogin() {
     }
 
     syncContext.sourceId = resp.sourceId;
+
+    const lastSyncedPull = await getLastSyncedPull();
+
+    // this is important in a scenario where we setup the sync by manually copying the document
+    // lastSyncedPull then could be pretty off for the newly cloned client
+    if (lastSyncedPull > resp.maxSyncId) {
+        log.info(`Lowering last synced pull from ${lastSyncedPull} to ${resp.maxSyncId}`);
+
+        await setLastSyncedPull(resp.maxSyncId);
+    }
 
     return syncContext;
 }
@@ -111,6 +125,10 @@ async function pullSync(syncContext) {
         const resp = await syncRequest(syncContext, 'GET', changesUri);
         stats.outstandingPulls = resp.maxSyncId - lastSyncedPull;
 
+        if (stats.outstandingPulls < 0) {
+            stats.outstandingPulls = 0;
+        }
+
         const rows = resp.syncs;
 
         if (rows.length === 0) {
@@ -118,7 +136,7 @@ async function pullSync(syncContext) {
         }
 
         log.info("Pulled " + rows.length + " changes from " + changesUri + " in "
-            + (new Date().getTime() - startDate.getTime()) + "ms");
+            + (Date.now() - startDate.getTime()) + "ms");
 
         for (const {sync, entity} of rows) {
             if (!sourceIdService.isLocalSourceId(sync.sourceId)) {
@@ -180,7 +198,7 @@ async function pushSync(syncContext) {
             entities: syncRecords
         });
 
-        log.info(`Pushing ${syncRecords.length} syncs in ` + (new Date().getTime() - startDate.getTime()) + "ms");
+        log.info(`Pushing ${syncRecords.length} syncs in ` + (Date.now() - startDate.getTime()) + "ms");
 
         lastSyncedPush = syncRecords[syncRecords.length - 1].sync.id;
 
@@ -212,42 +230,27 @@ async function checkContentHash(syncContext) {
     await contentHashService.checkContentHashes(resp.hashes);
 }
 
-async function syncRequest(syncContext, method, uri, body) {
-    const fullUri = await syncOptions.getSyncServerHost() + uri;
-
-    try {
-        const options = {
-            method: method,
-            uri: fullUri,
-            jar: syncContext.cookieJar,
-            json: true,
-            body: body,
-            timeout: await syncOptions.getSyncTimeout()
-        };
-
-        const syncProxy = await syncOptions.getSyncProxy();
-
-        if (syncProxy && proxyToggle) {
-            options.proxy = syncProxy;
-        }
-
-        return await rp(options);
-    }
-    catch (e) {
-        throw new Error(`Request to ${method} ${fullUri} failed, error: ${e.message}`);
-    }
+async function syncRequest(syncContext, method, requestPath, body) {
+    return await request.exec({
+        method,
+        url: await syncOptions.getSyncServerHost() + requestPath,
+        cookieJar: syncContext.cookieJar,
+        timeout: await syncOptions.getSyncTimeout(),
+        body,
+        proxy: proxyToggle ? await syncOptions.getSyncProxy() : null
+    });
 }
 
 const primaryKeys = {
     "notes": "noteId",
+    "note_contents": "noteId",
     "branches": "branchId",
     "note_revisions": "noteRevisionId",
-    "recent_notes": "branchId",
-    "images": "imageId",
-    "note_images": "noteImageId",
+    "recent_notes": "noteId",
     "api_tokens": "apiTokenId",
     "options": "name",
-    "attributes": "attributeId"
+    "attributes": "attributeId",
+    "links": "linkId"
 };
 
 async function getEntityRow(entityName, entityId) {
@@ -263,11 +266,16 @@ async function getEntityRow(entityName, entityId) {
 
         const entity = await sql.getRow(`SELECT * FROM ${entityName} WHERE ${primaryKey} = ?`, [entityId]);
 
-        if (entityName === 'notes' && entity.type === 'file') {
-            entity.content = entity.content.toString("binary");
+        if (!entity) {
+            throw new Error(`Entity ${entityName} ${entityId} not found.`);
         }
-        else if (entityName === 'images') {
-            entity.data = entity.data.toString('base64');
+
+        if (['note_contents', 'note_revisions'].includes(entityName) && entity.content !== null) {
+            if (typeof entity.content === 'string') {
+                entity.content = Buffer.from(entity.content, 'UTF-8');
+            }
+
+            entity.content = entity.content.toString("base64");
         }
 
         return entity;

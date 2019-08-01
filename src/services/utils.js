@@ -3,6 +3,8 @@
 const crypto = require('crypto');
 const randtoken = require('rand-token').generator({source: 'crypto'});
 const unescape = require('unescape');
+const escape = require('escape-html');
+const sanitize = require("sanitize-filename");
 
 function newEntityId() {
     return randomString(12);
@@ -14,6 +16,10 @@ function randomString(length) {
 
 function randomSecureToken(bytes = 32) {
     return crypto.randomBytes(bytes).toString('base64');
+}
+
+function md5(content) {
+    return crypto.createHash('md5').update(content).digest('hex');
 }
 
 function toBase64(plainText) {
@@ -44,7 +50,17 @@ function isEmptyOrWhitespace(str) {
 
 function sanitizeSql(str) {
     // should be improved or usage eliminated
-    return str.replace(/'/g, "\\'");
+    return str.replace(/'/g, "''");
+}
+
+function prepareSqlForLike(prefix, str, suffix) {
+    const value = str
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "''")
+        .replace(/_/g, "\\_")
+        .replace(/%/g, "\\%");
+
+    return `'${prefix}${value}${suffix}' ESCAPE '\\'`;
 }
 
 async function stopWatch(what, func) {
@@ -52,11 +68,15 @@ async function stopWatch(what, func) {
 
     const ret = await func();
 
-    const tookMs = new Date().getTime() - start.getTime();
+    const tookMs = Date.now() - start.getTime();
 
     console.log(`${what} took ${tookMs}ms`);
 
     return ret;
+}
+
+function escapeHtml(str) {
+    return escape(str);
 }
 
 function unescapeHtml(str) {
@@ -105,9 +125,39 @@ function union(a, b) {
     return res;
 }
 
+function escapeRegExp(str) {
+    return str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+}
+
+function crash() {
+    if (isElectron()) {
+        require('electron').app.exit(1);
+    }
+    else {
+        process.exit(1);
+    }
+}
+
+function sanitizeFilenameForHeader(filename) {
+    let sanitizedFilename = sanitize(filename);
+
+    if (sanitizedFilename.trim().length === 0) {
+        sanitizedFilename = "file";
+    }
+
+    return encodeURIComponent(sanitizedFilename)
+}
+
+function getContentDisposition(filename) {
+    const sanitizedFilename = sanitizeFilenameForHeader(filename);
+
+    return `file; filename="${sanitizedFilename}"; filename*=UTF-8''${sanitizedFilename}`;
+}
+
 module.exports = {
     randomSecureToken,
     randomString,
+    md5,
     newEntityId,
     toBase64,
     fromBase64,
@@ -116,10 +166,16 @@ module.exports = {
     hash,
     isEmptyOrWhitespace,
     sanitizeSql,
+    prepareSqlForLike,
     stopWatch,
+    escapeHtml,
     unescapeHtml,
     toObject,
     stripTags,
     intersection,
-    union
+    union,
+    escapeRegExp,
+    crash,
+    sanitizeFilenameForHeader,
+    getContentDisposition
 };

@@ -23,6 +23,7 @@ function formatTimeWithSeconds(date) {
     return padNum(date.getHours()) + ":" + padNum(date.getMinutes()) + ":" + padNum(date.getSeconds());
 }
 
+// this is producing local time!
 function formatDate(date) {
 //    return padNum(date.getDate()) + ". " + padNum(date.getMonth() + 1) + ". " + date.getFullYear();
     // instead of european format we'll just use ISO as that's pretty unambiguous
@@ -30,6 +31,7 @@ function formatDate(date) {
     return formatDateISO(date);
 }
 
+// this is producing local time!
 function formatDateISO(date) {
     return date.getFullYear() + "-" + padNum(date.getMonth() + 1) + "-" + padNum(date.getDate());
 }
@@ -43,7 +45,11 @@ function now() {
 }
 
 function isElectron() {
-    return window && window.process && window.process.type;
+    return !!(window && window.process && window.process.type);
+}
+
+function isMac() {
+    return navigator.platform.indexOf('Mac') > -1;
 }
 
 function assertArguments() {
@@ -52,14 +58,6 @@ function assertArguments() {
             console.trace(`Argument idx#${i} should not be falsy: ${arguments[i]}`);
         }
     }
-}
-
-function isTopLevelNode(node) {
-    return isRootNode(node.getParent());
-}
-
-function isRootNode(node) {
-    return node.data.noteId === "root";
 }
 
 function escapeHtml(str) {
@@ -71,7 +69,7 @@ async function stopWatch(what, func) {
 
     const ret = await func();
 
-    const tookMs = new Date().getTime() - start.getTime();
+    const tookMs = Date.now() - start.getTime();
 
     console.log(`${what} took ${tookMs}ms`);
 
@@ -132,11 +130,74 @@ function randomString(len) {
 }
 
 function bindShortcut(keyboardShortcut, handler) {
-    $(document).bind('keydown', keyboardShortcut, e => {
-        handler();
+    bindElShortcut($(document), keyboardShortcut, handler);
+}
 
-        e.preventDefault();
-    });
+function bindElShortcut($el, keyboardShortcut, handler) {
+    if (isDesktop()) {
+        if (isMac()) {
+            // use CMD (meta) instead of CTRL for all shortcuts
+            keyboardShortcut = keyboardShortcut.replace("ctrl", "meta");
+        }
+
+        $el.bind('keydown', keyboardShortcut, e => {
+            handler();
+
+            e.preventDefault();
+        });
+    }
+}
+
+function isMobile() {
+    return window.device === "mobile"
+        // window.device is not available in setup
+        || (!window.device && /Mobi/.test(navigator.userAgent));
+}
+
+function isDesktop() {
+    return window.device === "desktop"
+        // window.device is not available in setup
+        || (!window.device && !/Mobi/.test(navigator.userAgent));
+}
+
+// cookie code below works for simple use cases only - ASCII only
+// not setting path so that cookies do not leak into other websites if multiplexed with reverse proxy
+
+function setCookie(name, value) {
+    const date = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000);
+    const expires = "; expires=" + date.toUTCString();
+
+    document.cookie = name + "=" + (value || "")  + expires + ";";
+}
+
+function setSessionCookie(name, value) {
+    document.cookie = name + "=" + (value || "") + ";";
+}
+
+function getCookie(name) {
+    const valueMatch = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return valueMatch ? valueMatch[2] : null;
+}
+
+function getNoteTypeClass(type) {
+    return "type-" + type;
+}
+
+function getMimeTypeClass(mime) {
+    const semicolonIdx = mime.indexOf(';');
+
+    if (semicolonIdx !== -1) {
+        // stripping everything following the semicolon
+        mime = mime.substr(0, semicolonIdx);
+    }
+
+    return 'mime-' + mime.toLowerCase().replace(/[\W_]+/g,"-");
+}
+
+function closeActiveDialog() {
+    if (glob.activeDialog) {
+        glob.activeDialog.modal('hide');
+    }
 }
 
 export default {
@@ -150,9 +211,8 @@ export default {
     formatDateTime,
     now,
     isElectron,
+    isMac,
     assertArguments,
-    isTopLevelNode,
-    isRootNode,
     escapeHtml,
     stopWatch,
     formatValueWithWhitespace,
@@ -161,5 +221,14 @@ export default {
     download,
     toObject,
     randomString,
-    bindShortcut
+    bindShortcut,
+    bindElShortcut,
+    isMobile,
+    isDesktop,
+    setCookie,
+    setSessionCookie,
+    getCookie,
+    getNoteTypeClass,
+    getMimeTypeClass,
+    closeActiveDialog
 };

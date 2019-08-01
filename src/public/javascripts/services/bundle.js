@@ -8,8 +8,8 @@ async function getAndExecuteBundle(noteId, originEntity = null) {
     await executeBundle(bundle, originEntity);
 }
 
-async function executeBundle(bundle, originEntity) {
-    const apiContext = ScriptContext(bundle.note, bundle.allNotes, originEntity);
+async function executeBundle(bundle, originEntity, tabContext) {
+    const apiContext = await ScriptContext(bundle.noteId, bundle.allNoteIds, originEntity, tabContext);
 
     try {
         return await (function () {
@@ -17,7 +17,7 @@ async function executeBundle(bundle, originEntity) {
         }.call(apiContext));
     }
     catch (e) {
-        infoService.showAndLogError(`Execution of script "${bundle.note.title}" (${bundle.note.noteId}) failed with error: ${e.message}`);
+        infoService.showAndLogError(`Execution of ${bundle.noteId} failed with error: ${e.message}`);
     }
 }
 
@@ -29,11 +29,15 @@ async function executeStartupBundles() {
     }
 }
 
-async function executeRelationBundles(note, relationName) {
-    const bundlesToRun = await server.get("script/relation/" + note.noteId + "/" + relationName);
+async function executeRelationBundles(note, relationName, tabContext) {
+    note.bundleCache = note.bundleCache || {};
 
-    for (const bundle of bundlesToRun) {
-        await executeBundle(bundle, note);
+    if (!note.bundleCache[relationName]) {
+        note.bundleCache[relationName] = await server.get("script/relation/" + note.noteId + "/" + relationName);
+    }
+
+    for (const bundle of note.bundleCache[relationName]) {
+        await executeBundle(bundle, note, tabContext);
     }
 }
 

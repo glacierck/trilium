@@ -8,31 +8,29 @@ const $content = $("#note-revision-content");
 const $title = $("#note-revision-title");
 
 let revisionItems = [];
+let note;
 
 async function showCurrentNoteRevisions() {
-    await showNoteRevisionsDialog(noteDetailService.getCurrentNoteId());
+    await showNoteRevisionsDialog(noteDetailService.getActiveNoteId());
 }
 
 async function showNoteRevisionsDialog(noteId, noteRevisionId) {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    $dialog.dialog({
-        modal: true,
-        width: 800,
-        height: 700
-    });
+    $dialog.modal();
 
     $list.empty();
     $content.empty();
 
+    note = noteDetailService.getActiveNote();
     revisionItems = await server.get('notes/' + noteId + '/revisions');
 
     for (const item of revisionItems) {
-        const dateModified = utils.parseDate(item.dateModifiedFrom);
-
         $list.append($('<option>', {
             value: item.noteRevisionId,
-            text: utils.formatDateTime(dateModified)
+            text: item.dateModifiedFrom
         }));
     }
 
@@ -55,11 +53,14 @@ $list.on('change', () => {
 
     $title.html(revisionItem.title);
 
-    if (revisionItem.type === 'text') {
+    if (note.type === 'text') {
         $content.html(revisionItem.content);
     }
-    else if (revisionItem.type === 'code') {
+    else if (note.type === 'code') {
         $content.html($("<pre>").text(revisionItem.content));
+    }
+    else {
+        $content.text("Preview isn't available for this note type.");
     }
 });
 

@@ -2,32 +2,31 @@ import treeService from '../services/tree.js';
 import server from '../services/server.js';
 import treeCache from "../services/tree_cache.js";
 import treeUtils from "../services/tree_utils.js";
+import infoService from "../services/info.js";
+import utils from "../services/utils.js";
 
-const $dialog = $("#edit-tree-prefix-dialog");
-const $form = $("#edit-tree-prefix-form");
-const $treePrefixInput = $("#tree-prefix-input");
-const $noteTitle = $('#tree-prefix-note-title');
+const $dialog = $("#branch-prefix-dialog");
+const $form = $("#branch-prefix-form");
+const $treePrefixInput = $("#branch-prefix-input");
+const $noteTitle = $('#branch-prefix-note-title');
 
 let branchId;
 
-async function showDialog() {
+async function showDialog(node) {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    await $dialog.dialog({
-        modal: true,
-        width: 600
-    });
+    $dialog.modal();
 
-    const currentNode = treeService.getCurrentNode();
-
-    branchId = currentNode.data.branchId;
+    branchId = node.data.branchId;
     const branch = await treeCache.getBranch(branchId);
 
-    $treePrefixInput.val(branch.prefix).focus();
+    $treePrefixInput.val(branch.prefix);
 
-    const noteTitle = await treeUtils.getNoteTitle(currentNode.data.noteId);
+    const noteTitle = await treeUtils.getNoteTitle(node.data.noteId);
 
-    $noteTitle.html(noteTitle);
+    $noteTitle.text(" - " + noteTitle);
 }
 
 async function savePrefix() {
@@ -37,7 +36,9 @@ async function savePrefix() {
 
     await treeService.setPrefix(branchId, prefix);
 
-    $dialog.dialog("close");
+    $dialog.modal('hide');
+
+    infoService.showMessage("Branch prefix has been saved.");
 }
 
 $form.submit(() => {
@@ -45,6 +46,8 @@ $form.submit(() => {
 
     return false;
 });
+
+$dialog.on('shown.bs.modal', () => $treePrefixInput.focus());
 
 export default {
     showDialog

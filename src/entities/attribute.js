@@ -16,15 +16,15 @@ const sql = require('../services/sql');
  * @param {int} position
  * @param {boolean} isInheritable
  * @param {boolean} isDeleted
- * @param {string} dateCreated
- * @param {string} dateModified
+ * @param {string} utcDateCreated
+ * @param {string} utcDateModified
  *
  * @extends Entity
  */
 class Attribute extends Entity {
     static get entityName() { return "attributes"; }
     static get primaryKeyName() { return "attributeId"; }
-    static get hashedProperties() { return ["attributeId", "noteId", "type", "name", "value", "isInheritable", "isDeleted", "dateCreated"]; }
+    static get hashedProperties() { return ["attributeId", "noteId", "type", "name", "value", "isInheritable", "isDeleted", "utcDateCreated"]; }
 
     constructor(row) {
         super(row);
@@ -40,10 +40,20 @@ class Attribute extends Entity {
         }
     }
 
+    /**
+     * @returns {Promise<Note|null>}
+     */
     async getNote() {
-        return await repository.getEntity("SELECT * FROM notes WHERE noteId = ?", [this.noteId]);
+        if (!this.__note) {
+            this.__note = await repository.getEntity("SELECT * FROM notes WHERE noteId = ?", [this.noteId]);
+        }
+
+        return this.__note;
     }
 
+    /**
+     * @returns {Promise<Note|null>}
+     */
     async getTargetNote() {
         if (this.type !== 'relation') {
             throw new Error(`Attribute ${this.attributeId} is not relation`);
@@ -53,9 +63,16 @@ class Attribute extends Entity {
             return null;
         }
 
-        return await repository.getEntity("SELECT * FROM notes WHERE noteId = ?", [this.value]);
+        if (!this.__targetNote) {
+            this.__targetNote = await repository.getEntity("SELECT * FROM notes WHERE noteId = ?", [this.value]);
+        }
+
+        return this.__targetNote;
     }
 
+    /**
+     * @return {boolean}
+     */
     isDefinition() {
         return this.type === 'label-definition' || this.type === 'relation-definition';
     }
@@ -78,15 +95,20 @@ class Attribute extends Entity {
             this.isDeleted = false;
         }
 
-        if (!this.dateCreated) {
-            this.dateCreated = dateUtils.nowDate();
+        if (!this.utcDateCreated) {
+            this.utcDateCreated = dateUtils.utcNowDateTime();
         }
 
         super.beforeSaving();
 
         if (this.isChanged) {
-            this.dateModified = dateUtils.nowDate();
+            this.utcDateModified = dateUtils.utcNowDateTime();
         }
+    }
+
+    // cannot be static!
+    updatePojo(pojo) {
+        delete pojo.isOwned;
     }
 }
 

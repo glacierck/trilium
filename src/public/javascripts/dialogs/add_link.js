@@ -2,8 +2,8 @@ import cloningService from '../services/cloning.js';
 import linkService from '../services/link.js';
 import noteDetailService from '../services/note_detail.js';
 import treeUtils from '../services/tree_utils.js';
-import noteDetailText from "../services/note_detail_text.js";
 import noteAutocompleteService from "../services/note_autocomplete.js";
+import utils from "../services/utils.js";
 
 const $dialog = $("#add-link-dialog");
 const $form = $("#add-link-form");
@@ -15,7 +15,6 @@ const $prefixFormGroup = $("#add-link-prefix-form-group");
 const $linkTypeDiv = $("#add-link-type-div");
 const $linkTypes = $("input[name='add-link-type']");
 const $linkTypeHtml = $linkTypes.filter('input[value="html"]');
-const $showRecentNotesButton = $dialog.find(".show-recent-notes-button");
 
 function setLinkType(linkType) {
     $linkTypes.each(function () {
@@ -25,10 +24,16 @@ function setLinkType(linkType) {
     linkTypeChanged();
 }
 
-async function showDialog() {
+async function showDialogForClone() {
+    showDialog('selected-to-active');
+}
+
+async function showDialog(linkType) {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    if (noteDetailService.getCurrentNoteType() === 'text') {
+    if (noteDetailService.getActiveNoteType() === 'text') {
         $linkTypeHtml.prop('disabled', false);
 
         setLinkType('html');
@@ -36,13 +41,14 @@ async function showDialog() {
     else {
         $linkTypeHtml.prop('disabled', true);
 
-        setLinkType('selected-to-current');
+        setLinkType('selected-to-active');
     }
 
-    $dialog.dialog({
-        modal: true,
-        width: 700
-    });
+    if (linkType === 'selected-to-active') {
+        setLinkType(linkType);
+    }
+
+    $dialog.modal();
 
     $autoComplete.val('').focus();
     $clonePrefix.val('');
@@ -54,50 +60,31 @@ async function showDialog() {
         $linkTitle.val(noteTitle);
     }
 
-    await $autoComplete.autocomplete({
-        source: noteAutocompleteService.autocompleteSource,
-        minLength: 0,
-        change: async (event, ui) => {
-            if (!ui.item) {
-                return;
-            }
+    noteAutocompleteService.initNoteAutocomplete($autoComplete);
 
-            const notePath = linkService.getNotePathFromLabel(ui.item.value);
+    $autoComplete.on('autocomplete:selected', function(event, suggestion, dataset) {
+        if (!suggestion.path) {
+            return false;
+        }
 
-            if (!notePath) {
-                return;
-            }
+        const noteId = treeUtils.getNoteIdFromNotePath(suggestion.path);
 
-            const noteId = treeUtils.getNoteIdFromNotePath(notePath);
-
-            if (noteId) {
-                await setDefaultLinkTitle(noteId);
-            }
-        },
-        select: function (event, ui) {
-            if (ui.item.value === 'No results') {
-                return false;
-            }
-        },
-        // this is called when user goes through autocomplete list with keyboard
-        // at this point the item isn't selected yet so we use supplied ui.item to see WHERE the cursor is
-        focus: async (event, ui) => {
-            const notePath = linkService.getNotePathFromLabel(ui.item.value);
-            const noteId = treeUtils.getNoteIdFromNotePath(notePath);
-
-            await setDefaultLinkTitle(noteId);
-
-            event.preventDefault();
+        if (noteId) {
+            setDefaultLinkTitle(noteId);
         }
     });
 
-    showRecentNotes();
+    $autoComplete.on('autocomplete:cursorchanged', function(event, suggestion, dataset) {
+        const noteId = treeUtils.getNoteIdFromNotePath(suggestion.path);
+
+        setDefaultLinkTitle(noteId);
+    });
+
+    noteAutocompleteService.showRecentNotes($autoComplete);
 }
 
 $form.submit(() => {
-    const value = $autoComplete.val();
-
-    const notePath = linkService.getNotePathFromLabel(value);
+    const notePath = $autoComplete.getSelectedPath();
     const noteId = treeUtils.getNoteIdFromNotePath(notePath);
 
     if (notePath) {
@@ -106,33 +93,37 @@ $form.submit(() => {
         if (linkType === 'html') {
             const linkTitle = $linkTitle.val();
 
-            $dialog.dialog("close");
+            $dialog.modal('hide');
 
             const linkHref = '#' + notePath;
+            const editor = noteDetailService.getActiveEditor();
 
             if (hasSelection()) {
-                const editor = noteDetailText.getEditor();
-
                 editor.execute('link', linkHref);
             }
             else {
                 linkService.addLinkToEditor(linkTitle, linkHref);
             }
+
+            editor.editing.view.focus();
         }
-        else if (linkType === 'selected-to-current') {
+        else if (linkType === 'selected-to-active') {
             const prefix = $clonePrefix.val();
 
-            cloningService.cloneNoteTo(noteId, noteDetailService.getCurrentNoteId(), prefix);
+            cloningService.cloneNoteTo(noteId, noteDetailService.getActiveNoteId(), prefix);
 
-            $dialog.dialog("close");
+            $dialog.modal('hide');
         }
-        else if (linkType === 'current-to-selected') {
+        else if (linkType === 'active-to-selected') {
             const prefix = $clonePrefix.val();
 
-            cloningService.cloneNoteTo(noteDetailService.getCurrentNoteId(), noteId, prefix);
+            cloningService.cloneNoteTo(noteDetailService.getActiveNoteId(), noteId, prefix);
 
-            $dialog.dialog("close");
+            $dialog.modal('hide');
         }
+    }
+    else {
+        console.error("No path to add link.");
     }
 
     return false;
@@ -140,7 +131,7 @@ $form.submit(() => {
 
 // returns true if user selected some text, false if there's no selection
 function hasSelection() {
-    const model = noteDetailText.getEditor().model;
+    const model = noteDetailService.getActiveEditor().model;
     const selection = model.document.selection;
 
     return !selection.isCollapsed;
@@ -155,14 +146,9 @@ function linkTypeChanged() {
     $linkTypeDiv.toggle(!hasSelection());
 }
 
-function showRecentNotes() {
-    $autoComplete.autocomplete("search", "");
-}
-
 $linkTypes.change(linkTypeChanged);
 
-$showRecentNotesButton.click(showRecentNotes);
-
 export default {
-    showDialog
+    showDialog,
+    showDialogForClone
 };

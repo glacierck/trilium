@@ -3,22 +3,21 @@ import utils from '../services/utils.js';
 import server from '../services/server.js';
 
 const $dialog = $("#recent-changes-dialog");
+const $content = $("#recent-changes-content");
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    $dialog.dialog({
-        modal: true,
-        width: 800,
-        height: 700
-    });
+    $dialog.modal();
 
-    const result = await server.get('recent-changes/');
+    const result = await server.get('recent-changes');
 
-    $dialog.empty();
+    $content.empty();
 
     if (result.length === 0) {
-        $dialog.append("No changes yet ...");
+        $content.append("No changes yet ...");
     }
 
     const groupedByDate = groupByDate(result);
@@ -29,14 +28,7 @@ async function showDialog() {
         const dayEl = $('<div>').append($('<b>').html(utils.formatDate(dateDay))).append(changesListEl);
 
         for (const change of dayChanges) {
-            const formattedTime = utils.formatTime(utils.parseDate(change.dateModifiedTo));
-
-            const revLink = $("<a>", {
-                href: 'javascript:',
-                text: 'rev'
-            }).attr('data-action', 'note-revision')
-                .attr('data-note-path', change.noteId)
-                .attr('data-note-revision-id', change.noteRevisionId);
+            const formattedTime = utils.formatTime(utils.parseDate(change.utcDateModifiedTo));
 
             let noteLink;
 
@@ -49,11 +41,10 @@ async function showDialog() {
 
             changesListEl.append($('<li>')
                 .append(formattedTime + ' - ')
-                .append(noteLink)
-                .append(' (').append(revLink).append(')'));
+                .append(noteLink));
         }
 
-        $dialog.append(dayEl);
+        $content.append(dayEl);
     }
 }
 
@@ -62,7 +53,7 @@ function groupByDate(result) {
     const dayCache = {};
 
     for (const row of result) {
-        let dateDay = utils.parseDate(row.dateModifiedTo);
+        let dateDay = utils.parseDate(row.utcDateModifiedTo);
         dateDay.setHours(0);
         dateDay.setMinutes(0);
         dateDay.setSeconds(0);

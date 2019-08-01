@@ -1,27 +1,27 @@
-import utils from '../services/utils.js';
 import libraryLoader from '../services/library_loader.js';
 import server from '../services/server.js';
 import infoService from "../services/info.js";
+import utils from "../services/utils.js";
 
 const $dialog = $("#sql-console-dialog");
 const $query = $('#sql-console-query');
 const $executeButton = $('#sql-console-execute');
 const $resultHead = $('#sql-console-results thead');
 const $resultBody = $('#sql-console-results tbody');
+const $tables = $("#sql-console-tables");
 
 let codeEditor;
 
-function showDialog() {
+$dialog.on("shown.bs.modal", e => initEditor());
+
+async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
-    $dialog.dialog({
-        modal: true,
-        width: $(window).width(),
-        height: $(window).height(),
-        open: function() {
-            initEditor();
-        }
-    });
+    await showTables();
+
+    $dialog.modal();
 }
 
 async function initEditor() {
@@ -55,7 +55,12 @@ async function execute(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    const sqlQuery = codeEditor.getValue();
+    // execute the selected text or the whole content if there's no selection
+    let sqlQuery = codeEditor.getSelection();
+
+    if (!sqlQuery) {
+        sqlQuery = codeEditor.getValue();
+    }
 
     const result = await server.post("sql/execute", {
         query: sqlQuery
@@ -93,6 +98,32 @@ async function execute(e) {
         }
 
         $resultBody.append(rowEl);
+    }
+}
+
+async function showTables() {
+    const tables = await server.get('sql/schema');
+
+    $tables.empty();
+
+    for (const table of tables) {
+        const $tableLink = $('<button class="btn">').text(table.name);
+
+        const $columns = $("<table>");
+
+        for (const column of table.columns) {
+            $columns.append(
+                $("<tr>")
+                    .append($("<td>").text(column.name))
+                    .append($("<td>").text(column.type))
+            );
+        }
+
+        $tables.append($tableLink).append(" ");
+
+        $tableLink
+            .tooltip({html: true, title: $columns.html()})
+            .click(() => codeEditor.setValue("SELECT * FROM " + table.name + " LIMIT 100"));
     }
 }
 

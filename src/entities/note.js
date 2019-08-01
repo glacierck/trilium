@@ -4,10 +4,17 @@ const Entity = require('./entity');
 const Attribute = require('./attribute');
 const protectedSessionService = require('../services/protected_session');
 const repository = require('../services/repository');
+const sql = require('../services/sql');
+const utils = require('../services/utils');
 const dateUtils = require('../services/date_utils');
+const syncTableService = require('../services/sync_table');
 
 const LABEL = 'label';
+const LABEL_DEFINITION = 'label-definition';
 const RELATION = 'relation';
+const RELATION_DEFINITION = 'relation-definition';
+
+const STRING_MIME_TYPES = ["application/x-javascript"];
 
 /**
  * This represents a Note which is a central object in the Trilium Notes project.
@@ -16,18 +23,19 @@ const RELATION = 'relation';
  * @property {string} type - one of "text", "code", "file" or "render"
  * @property {string} mime - MIME type, e.g. "text/html"
  * @property {string} title - note title
- * @property {string} content - note content - e.g. HTML text for text notes, file payload for files
  * @property {boolean} isProtected - true if note is protected
  * @property {boolean} isDeleted - true if note is deleted
- * @property {string} dateCreated
- * @property {string} dateModified
+ * @property {string} dateCreated - local date time (with offset)
+ * @property {string} dateModified - local date time (with offset)
+ * @property {string} utcDateCreated
+ * @property {string} utcDateModified
  *
  * @extends Entity
  */
 class Note extends Entity {
     static get entityName() { return "notes"; }
     static get primaryKeyName() { return "noteId"; }
-    static get hashedProperties() { return ["noteId", "title", "content", "type", "isProtected", "isDeleted"]; }
+    static get hashedProperties() { return ["noteId", "title", "type", "isProtected", "isDeleted"]; }
 
     /**
      * @param row - object containing database row from "notes" table
@@ -36,22 +44,106 @@ class Note extends Entity {
         super(row);
 
         this.isProtected = !!this.isProtected;
+        /* true if content (meaning any kind of potentially encrypted content) is either not encrypted
+         * or encrypted, but with available protected session (so effectively decrypted) */
+        this.isContentAvailable = true;
 
         // check if there's noteId, otherwise this is a new entity which wasn't encrypted yet
         if (this.isProtected && this.noteId) {
-            protectedSessionService.decryptNote(this);
-        }
+            this.isContentAvailable = protectedSessionService.isProtectedSessionAvailable();
 
-        this.setContent(this.content);
+            if (this.isContentAvailable) {
+                protectedSessionService.decryptNote(this);
+            }
+            else {
+                this.title = "[protected]";
+            }
+        }
     }
 
-    setContent(content) {
+    /*
+     * Note content has quite special handling - it's not a separate entity, but a lazily loaded
+     * part of Note entity with it's own sync. Reasons behind this hybrid design has been:
+     *
+     * - content can be quite large and it's not necessary to load it / fill memory for any note access even if we don't need a content, especially for bulk operations like search
+     * - changes in the note metadata or title should not trigger note content sync (so we keep separate utcDateModified and sync rows)
+     * - but to the user note content and title changes are one and the same - single dateModified (so all changes must go through Note and content is not a separate entity)
+     */
+
+    /** @returns {Promise<*>} */
+    async getContent(silentNotFoundError = false) {
+        if (this.content === undefined) {
+            const res = await sql.getRow(`SELECT content, hash FROM note_contents WHERE noteId = ?`, [this.noteId]);
+
+            if (!res) {
+                if (silentNotFoundError) {
+                    return undefined;
+                }
+                else {
+                    throw new Error("Cannot find note content for noteId=" + this.noteId);
+                }
+            }
+
+            this.content = res.content;
+
+            if (this.isProtected) {
+                if (this.isContentAvailable) {
+                    protectedSessionService.decryptNoteContent(this);
+                }
+                else {
+                    this.content = "";
+                }
+            }
+
+            if (this.isStringNote()) {
+                this.content = this.content === null
+                    ? ""
+                    : this.content.toString("UTF-8");
+            }
+        }
+
+        return this.content;
+    }
+
+    /** @returns {Promise<*>} */
+    async getJsonContent() {
+        const content = await this.getContent();
+
+        return JSON.parse(content);
+    }
+
+    /** @returns {Promise} */
+    async setContent(content) {
+        // force updating note itself so that dateChanged is represented correctly even for the content
+        this.forcedChange = true;
+        await this.save();
+
         this.content = content;
 
-        try {
-            this.jsonContent = JSON.parse(this.content);
+        const pojo = {
+            noteId: this.noteId,
+            content: content,
+            utcDateModified: dateUtils.utcNowDateTime(),
+            hash: utils.hash(this.noteId + "|" + content)
+        };
+
+        if (this.isProtected) {
+            if (this.isContentAvailable) {
+                protectedSessionService.encryptNoteContent(pojo);
+            }
+            else {
+                throw new Error(`Cannot update content of noteId=${this.noteId} since we're out of protected session.`);
+            }
         }
-        catch(e) {}
+
+        await sql.upsert("note_contents", "noteId", pojo);
+
+        await syncTableService.addNoteContentSync(this.noteId);
+    }
+
+    /** @returns {Promise} */
+    async setJsonContent(content) {
+        await this.setContent(JSON.stringify(content, null, '\t'));
     }
 
     /** @returns {boolean} true if this note is the root of the note tree. Root note has "root" noteId */
@@ -67,12 +159,21 @@ class Note extends Entity {
     /** @returns {boolean} true if this note is JavaScript (code or attachment) */
     isJavaScript() {
         return (this.type === "code" || this.type === "file")
-            && (this.mime.startsWith("application/javascript") || this.mime === "application/x-javascript");
+            && (this.mime.startsWith("application/javascript")
+                || this.mime === "application/x-javascript"
+                || this.mime === "text/javascript");
     }
 
     /** @returns {boolean} true if this note is HTML */
     isHtml() {
         return (this.type === "code" || this.type === "file" || this.type === "render") && this.mime === "text/html";
+    }
+
+    /** @returns {boolean} true if the note has string content (not binary) */
+    isStringNote() {
+        return ["text", "code", "relation-map", "search"].includes(this.type)
+            || this.mime.startsWith('text/')
+            || STRING_MIME_TYPES.includes(this.mime);
     }
 
     /** @returns {string} JS script environment - either "frontend" or "backend" */
@@ -97,6 +198,13 @@ class Note extends Entity {
      */
     async getOwnedAttributes() {
         return await repository.getEntities(`SELECT * FROM attributes WHERE isDeleted = 0 AND noteId = ?`, [this.noteId]);
+    }
+
+    /**
+     * @returns {Promise<Attribute[]>} relations targetting this specific note
+     */
+    async getTargetRelations() {
+        return await repository.getEntities("SELECT * FROM attributes WHERE type = 'relation' AND isDeleted = 0 AND value = ?", [this.noteId]);
     }
 
     /**
@@ -125,11 +233,27 @@ class Note extends Entity {
     }
 
     /**
+     * @param {string} [name] - label name to filter
+     * @returns {Promise<Attribute[]>} all note's label definitions, including inherited ones
+     */
+    async getLabelDefinitions(name) {
+        return (await this.getAttributes(name)).filter(attr => attr.type === LABEL_DEFINITION);
+    }
+
+    /**
      * @param {string} [name] - relation name to filter
      * @returns {Promise<Attribute[]>} all note's relations (attributes with type relation), including inherited ones
      */
     async getRelations(name) {
         return (await this.getAttributes(name)).filter(attr => attr.type === RELATION);
+    }
+
+    /**
+     * @param {string} [name] - relation name to filter
+     * @returns {Promise<Attribute[]>} all note's relation definitions including inherited ones
+     */
+    async getRelationDefinitions(name) {
+        return (await this.getAttributes(name)).filter(attr => attr.type === RELATION_DEFINITION);
     }
 
     /**
@@ -337,6 +461,16 @@ class Note extends Entity {
     async getRelationValue(name) { return await this.getAttributeValue(RELATION, name); }
 
     /**
+     * @param {string} name
+     * @returns {Promise<Note>|null} target note of the relation or null (if target is empty or note was not found)
+     */
+    async getRelationTarget(name) {
+        const relation = await this.getRelation(name);
+
+        return relation ? await repository.getNote(relation.value) : null;
+    }
+
+    /**
      * Based on enabled, label is either set or removed.
      *
      * @param {boolean} enabled - toggle On or Off
@@ -393,24 +527,32 @@ class Note extends Entity {
     async removeRelation(name, value) { return await this.removeAttribute(RELATION, name, value); }
 
     /**
-     * @param {string} name
-     * @returns {Promise<Note>|null} target note of the relation or null (if target is empty or note was not found)
+     * @return {Promise<string[]>} return list of all descendant noteIds of this note. Returning just noteIds because number of notes can be huge. Includes also this note's noteId
      */
-    async getRelationTarget(name) {
-        const relation = await this.getRelation(name);
-
-        return relation ? await repository.getNote(relation.value) : null;
+    async getDescendantNoteIds() {
+        return await sql.getColumn(`
+            WITH RECURSIVE
+            tree(noteId) AS (
+                SELECT ?
+                UNION
+                SELECT branches.noteId FROM branches
+                    JOIN tree ON branches.parentNoteId = tree.noteId
+                    JOIN notes ON notes.noteId = branches.noteId
+                WHERE notes.isDeleted = 0
+                  AND branches.isDeleted = 0
+            )
+            SELECT noteId FROM tree`, [this.noteId]);
     }
 
     /**
-     * Finds notes with given attribute name and value. Only own attributes are considered, not inherited ones
+     * Finds descendant notes with given attribute name and value. Only own attributes are considered, not inherited ones
      *
      * @param {string} type - attribute type (label, relation, etc.)
      * @param {string} name - attribute name
      * @param {string} [value] - attribute value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithAttribute(type, name, value) {
+    async getDescendantNotesWithAttribute(type, name, value) {
         const params = [this.noteId, name];
         let valueCondition = "";
 
@@ -442,22 +584,22 @@ class Note extends Entity {
     }
 
     /**
-     * Finds notes with given label name and value. Only own labels are considered, not inherited ones
+     * Finds descendant notes with given label name and value. Only own labels are considered, not inherited ones
      *
      * @param {string} name - label name
      * @param {string} [value] - label value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithLabel(name, value) { return await this.findNotesWithAttribute(LABEL, name, value); }
+    async getDescendantNotesWithLabel(name, value) { return await this.getDescendantNotesWithAttribute(LABEL, name, value); }
 
     /**
-     * Finds notes with given relation name and value. Only own relations are considered, not inherited ones
+     * Finds descendant notes with given relation name and value. Only own relations are considered, not inherited ones
      *
      * @param {string} name - relation name
      * @param {string} [value] - relation value
      * @returns {Promise<Note[]>}
      */
-    async findNotesWithRelation(name, value) { return await this.findNotesWithAttribute(RELATION, name, value); }
+    async getDescendantNotesWithRelation(name, value) { return await this.getDescendantNotesWithAttribute(RELATION, name, value); }
 
     /**
      * Returns note revisions of this note.
@@ -469,10 +611,30 @@ class Note extends Entity {
     }
 
     /**
-     * @returns {Promise<NoteImage[]>}
+     * Get list of links coming out of this note.
+     *
+     * @returns {Promise<Link[]>}
      */
-    async getNoteImages() {
-        return await repository.getEntities("SELECT * FROM note_images WHERE noteId = ? AND isDeleted = 0", [this.noteId]);
+    async getLinks() {
+        return await repository.getEntities("SELECT * FROM links WHERE noteId = ? AND isDeleted = 0", [this.noteId]);
+    }
+
+    /**
+     * Get list of links targetting this note.
+     *
+     * @returns {Promise<Link[]>}
+     */
+    async getTargetLinks() {
+        return await repository.getEntities("SELECT * FROM links WHERE targetNoteId = ? AND isDeleted = 0", [this.noteId]);
+    }
+
+    /**
+     * Return all links from this note, including deleted ones.
+     *
+     * @returns {Promise<Link[]>}
+     */
+    async getLinksWithDeleted() {
+        return await repository.getEntities("SELECT * FROM links WHERE noteId = ?", [this.noteId]);
     }
 
     /**
@@ -530,30 +692,42 @@ class Note extends Entity {
     }
 
     beforeSaving() {
-        if (this.isJson() && this.jsonContent) {
-            this.content = JSON.stringify(this.jsonContent, null, '\t');
-        }
-
-        // we do this here because encryption needs the note ID for the IV
-        this.generateIdIfNecessary();
-
-        if (this.isProtected) {
-            protectedSessionService.encryptNote(this);
-        }
-
         if (!this.isDeleted) {
             this.isDeleted = false;
         }
 
         if (!this.dateCreated) {
-            this.dateCreated = dateUtils.nowDate();
+            this.dateCreated = dateUtils.localNowDateTime();
+        }
+
+        if (!this.utcDateCreated) {
+            this.utcDateCreated = dateUtils.utcNowDateTime();
         }
 
         super.beforeSaving();
 
         if (this.isChanged) {
-            this.dateModified = dateUtils.nowDate();
+            this.dateModified = dateUtils.localNowDateTime();
+            this.utcDateModified = dateUtils.utcNowDateTime();
         }
+    }
+
+    // cannot be static!
+    updatePojo(pojo) {
+        if (pojo.isProtected) {
+            if (this.isContentAvailable) {
+                protectedSessionService.encryptNote(pojo);
+            }
+            else {
+                // updating protected note outside of protected session means we will keep original ciphertexts
+                delete pojo.title;
+            }
+        }
+
+        delete pojo.isContentAvailable;
+        delete pojo.__attributeCache;
+        delete pojo.content;
+        delete pojo.contentHash;
     }
 }
 

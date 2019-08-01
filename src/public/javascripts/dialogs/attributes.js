@@ -2,7 +2,8 @@ import noteDetailService from '../services/note_detail.js';
 import server from '../services/server.js';
 import infoService from "../services/info.js";
 import treeUtils from "../services/tree_utils.js";
-import linkService from "../services/link.js";
+import attributeAutocompleteService from "../services/attribute_autocomplete.js";
+import utils from "../services/utils.js";
 
 const $dialog = $("#attributes-dialog");
 const $saveAttributesButton = $("#save-attributes-button");
@@ -61,15 +62,18 @@ function AttributesModel() {
 
         for (const attr of ownedAttributes) {
             attr.labelValue = attr.type === 'label' ? attr.value : '';
-            attr.relationValue = attr.type === 'relation' ? (await treeUtils.getNoteTitle(attr.value) + " (" + attr.value + ")") : '';
+            attr.relationValue = attr.type === 'relation' ? (await treeUtils.getNoteTitle(attr.value)) : '';
+            attr.selectedPath = attr.type === 'relation' ? attr.value : '';
             attr.labelDefinition = (attr.type === 'label-definition' && attr.value) ? attr.value : {
                 labelType: "text",
                 multiplicityType: "singlevalue",
-                isPromoted: true
+                isPromoted: true,
+                numberPrecision: 0
             };
 
             attr.relationDefinition = (attr.type === 'relation-definition' && attr.value) ? attr.value : {
                 multiplicityType: "singlevalue",
+                inverseRelation: "",
                 isPromoted: true
             };
 
@@ -86,20 +90,14 @@ function AttributesModel() {
     }
 
     this.loadAttributes = async function() {
-        const noteId = noteDetailService.getCurrentNoteId();
+        const noteId = noteDetailService.getActiveNoteId();
 
         const attributes = await server.get('notes/' + noteId + '/attributes');
 
         await showAttributes(attributes);
 
         // attribute might not be rendered immediatelly so could not focus
-        setTimeout(() => $(".attribute-type-select:last").focus(), 100);
-
-        $ownedAttributesBody.sortable({
-            handle: '.handle',
-            containment: $ownedAttributesBody,
-            update: this.updateAttributePositions
-        });
+        setTimeout(() => $(".attribute-type-select:last").focus(), 1000);
     };
 
     this.deleteAttribute = function(data, event) {
@@ -117,7 +115,7 @@ function AttributesModel() {
 
     function isValid() {
         for (let attributes = self.ownedAttributes(), i = 0; i < attributes.length; i++) {
-            if (self.isEmptyName(i)) {
+            if (self.isEmptyName(i) || self.isEmptyRelationTarget(i)) {
                 return false;
             }
         }
@@ -138,7 +136,7 @@ function AttributesModel() {
 
         self.updateAttributePositions();
 
-        const noteId = noteDetailService.getCurrentNoteId();
+        const noteId = noteDetailService.getActiveNoteId();
 
         const attributesToSave = self.ownedAttributes()
             .map(attribute => attribute())
@@ -149,7 +147,7 @@ function AttributesModel() {
                 attr.value = attr.labelValue;
             }
             else if (attr.type === 'relation') {
-                attr.value = treeUtils.getNoteIdFromNotePath(linkService.getNotePathFromLabel(attr.relationValue)) || "";
+                attr.value = treeUtils.getNoteIdFromNotePath(attr.selectedPath);
             }
             else if (attr.type === 'label-definition') {
                 attr.value = attr.labelDefinition;
@@ -170,7 +168,11 @@ function AttributesModel() {
 
         infoService.showMessage("Attributes have been saved.");
 
-        noteDetailService.refreshAttributes();
+        const ctx = noteDetailService.getActiveTabContext();
+
+        ctx.attributes.refreshAttributes();
+
+        noteDetailService.reload();
     };
 
     function addLastEmptyRow() {
@@ -190,10 +192,12 @@ function AttributesModel() {
                 labelDefinition: {
                     labelType: "text",
                     multiplicityType: "singlevalue",
-                    isPromoted: true
+                    isPromoted: true,
+                    numberPrecision: 0
                 },
                 relationDefinition: {
                     multiplicityType: "singlevalue",
+                    inverseRelation: "",
                     isPromoted: true
                 }
             }));
@@ -211,7 +215,35 @@ function AttributesModel() {
     this.isEmptyName = function(index) {
         const cur = self.ownedAttributes()[index]();
 
-        return cur.name.trim() === "" && !cur.isDeleted && (cur.attributeId !== "" || cur.labelValue !== "" || cur.relationValue);
+        if (cur.name.trim() || cur.isDeleted) {
+            return false;
+        }
+
+        if (cur.attributeId) {
+            // name is empty and attribute already exists so this is NO-GO
+            return true;
+        }
+
+        if (cur.type === 'relation-definition' || cur.type === 'label-definition') {
+            // for definitions there's no possible empty value so we always require name
+            return true;
+        }
+
+        if (cur.type === 'label' && cur.labelValue) {
+            return true;
+        }
+
+        if (cur.type === 'relation' && cur.relationValue) {
+            return true;
+        }
+
+        return false;
+    };
+
+    this.isEmptyRelationTarget = function(index) {
+        const cur = self.ownedAttributes()[index]();
+
+        return cur.type === "relation" && !cur.isDeleted && cur.name && !cur.relationValue;
     };
 
     this.getTargetAttribute = function(target) {
@@ -223,78 +255,36 @@ function AttributesModel() {
 }
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
+    // lazily apply bindings on first use
+    if (!ko.dataFor($dialog[0])) {
+        ko.applyBindings(attributesModel, $dialog[0]);
+    }
+
     glob.activeDialog = $dialog;
 
     await attributesModel.loadAttributes();
 
-    $dialog.dialog({
-        modal: true,
-        width: 950,
-        height: 700
-    });
+    $dialog.modal();
 }
 
-ko.applyBindings(attributesModel, $dialog[0]);
-
 $dialog.on('focus', '.attribute-name', function (e) {
-    if (!$(this).hasClass("ui-autocomplete-input")) {
-        $(this).autocomplete({
-            source: async (request, response) => {
-                const attribute = attributesModel.getTargetAttribute(this);
-                const type = (attribute().type === 'relation' || attribute().type === 'relation-definition') ? 'relation' : 'label';
-                const names = await server.get('attributes/names/?type=' + type + '&query=' + encodeURIComponent(request.term));
-                const result = names.map(name => {
-                    return {
-                        label: name,
-                        value: name
-                    }
-                });
-
-                if (result.length > 0) {
-                    response(result);
-                }
-                else {
-                    response([{
-                        label: "No results",
-                        value: "No results"
-                    }]);
-                }
-            },
-            minLength: 0
-        });
-    }
-
-    $(this).autocomplete("search", $(this).val());
+    attributeAutocompleteService.initAttributeNameAutocomplete({
+        $el: $(this),
+        attributeType: () => {
+            const attribute = attributesModel.getTargetAttribute(this);
+            return (attribute().type === 'relation' || attribute().type === 'relation-definition') ? 'relation' : 'label';
+        },
+        open: true
+    });
 });
 
-$dialog.on('focus', '.label-value', async function (e) {
-    if (!$(this).hasClass("ui-autocomplete-input")) {
-        const attributeName = $(this).parent().parent().find('.attribute-name').val();
-
-        if (attributeName.trim() === "") {
-            return;
-        }
-
-        const attributeValues = await server.get('attributes/values/' + encodeURIComponent(attributeName));
-
-        if (attributeValues.length === 0) {
-            return;
-        }
-
-        $(this).autocomplete({
-            // shouldn't be required and autocomplete should just accept array of strings, but that fails
-            // because we have overriden filter() function in autocomplete.js
-            source: attributeValues.map(attribute => {
-                return {
-                    attribute: attribute,
-                    value: attribute
-                }
-            }),
-            minLength: 0
-        });
-    }
-
-    $(this).autocomplete("search", $(this).val());
+$dialog.on('focus', '.label-value', function (e) {
+    attributeAutocompleteService.initLabelValueAutocomplete({
+        $el: $(this),
+        open: true
+    })
 });
 
 export default {

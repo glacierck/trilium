@@ -6,6 +6,9 @@ import linkService from './link.js';
 import treeCache from './tree_cache.js';
 import noteDetailService from './note_detail.js';
 import noteTypeService from './note_type.js';
+import noteTooltipService from './note_tooltip.js';
+import protectedSessionService from'./protected_session.js';
+import dateNotesService from'./date_notes.js';
 
 /**
  * This is the main frontend API interface for scripts. It's published in the local "api" object.
@@ -13,7 +16,7 @@ import noteTypeService from './note_type.js';
  * @constructor
  * @hideconstructor
  */
-function FrontendScriptApi(startNote, currentNote, originEntity = null) {
+function FrontendScriptApi(startNote, currentNote, originEntity = null, tabContext = null) {
     const $pluginButtons = $("#plugin-buttons");
 
     /** @property {object} note where script started executing */
@@ -23,6 +26,12 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
     /** @property {object|null} entity whose event triggered this execution */
     this.originEntity = originEntity;
 
+    // to keep consistency with backend API
+    this.dayjs = dayjs;
+
+    /** @property {TabContext|null} - experimental! */
+    this.tabContext = tabContext;
+
     /**
      * Activates note in the tree and in the note detail.
      *
@@ -30,7 +39,11 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
      * @param {string} notePath (or noteId)
      * @returns {Promise<void>}
      */
-    this.activateNote = treeService.activateNote;
+    this.activateNote = async (notePath, noteLoadedListener) => {
+        await treeService.activateNote(notePath, noteLoadedListener);
+
+        await treeService.scrollToActiveNote();
+    };
 
     /**
      * Activates newly created note. Compared to this.activateNote() also refreshes tree.
@@ -41,13 +54,13 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
     this.activateNewNote = async notePath => {
         await treeService.reload();
 
-        await treeService.activateNote(notePath, true);
+        await treeService.activateNote(notePath, noteDetailService.focusAndSelectTitle);
     };
 
     /**
      * @typedef {Object} ToolbarButtonOptions
      * @property {string} title
-     * @property {string} [icon] - name of the jQuery UI icon to be used (e.g. "clock" for "ui-icon-clock" icon)
+     * @property {string} [icon] - name of the JAM icon to be used (e.g. "clock" for "jam-clock" icon)
      * @property {function} action - callback handling the click on the button
      * @property {string} [shortcut] - keyboard shortcut for the button, e.g. "alt+t"
      */
@@ -60,14 +73,16 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
     this.addButtonToToolbar = opts => {
         const buttonId = "toolbar-button-" + opts.title.replace(/[^a-zA-Z0-9]/g, "-");
 
-        const icon = $("<span>")
-            .addClass("ui-icon ui-icon-" + opts.icon);
-
         const button = $('<button>')
-            .addClass("btn btn-xs")
-            .click(opts.action)
-            .append(icon)
-            .append($("<span>").text(opts.title));
+            .addClass("btn btn-sm")
+            .click(opts.action);
+
+        if (opts.icon) {
+            button.append($("<span>").addClass("jam jam-" + opts.icon))
+                  .append("&nbsp;");
+        }
+
+        button.append($("<span>").text(opts.title));
 
         button.attr('id', buttonId);
 
@@ -128,6 +143,46 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
     };
 
     /**
+     * This is a powerful search method - you can search by attributes and their values, e.g.:
+     * "@dateModified =* MONTH AND @log". See full documentation for all options at: https://github.com/zadam/trilium/wiki/Search
+     *
+     * @method
+     * @param {string} searchString
+     * @returns {Promise<NoteShort[]>}
+     */
+    this.searchForNotes = async searchString => {
+        const noteIds = await this.runOnServer(async searchString => {
+            const notes = await api.searchForNotes(searchString);
+
+            return notes.map(note => note.noteId);
+        }, [searchString]);
+
+        return await treeCache.getNotes(noteIds);
+    };
+
+    /**
+     * This is a powerful search method - you can search by attributes and their values, e.g.:
+     * "@dateModified =* MONTH AND @log". See full documentation for all options at: https://github.com/zadam/trilium/wiki/Search
+     *
+     * @method
+     * @param {string} searchString
+     * @returns {Promise<NoteShort|null>}
+     */
+    this.searchForNote = async searchString => {
+        const notes = await this.searchForNotes(searchString);
+
+        return notes.length > 0 ? notes[0] : null;
+    };
+
+    /**
+     * Returns note by given noteId. If note is missing from cache, it's loaded.
+     **
+     * @param {string} noteId
+     * @return {Promise<NoteShort>}
+     */
+    this.getNote = async noteId => await treeCache.getNote(noteId);
+
+    /**
      * Returns list of notes. If note is missing from cache, it's loaded.
      *
      * This is often used to bulk-fill the cache with notes which would have to be picked one by one
@@ -138,6 +193,18 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
      * @return {Promise<NoteShort[]>}
      */
     this.getNotes = async (noteIds, silentNotFoundError = false) => await treeCache.getNotes(noteIds, silentNotFoundError);
+
+    /**
+     * @param {string} noteId
+     * @method
+     */
+    this.reloadChildren = async noteId => await treeCache.reloadChildren(noteId);
+
+    /**
+     * @param {string} noteId
+     * @method
+     */
+    this.reloadParents = async noteId => await treeCache.reloadParents(noteId);
 
     /**
      * Instance name identifies particular Trilium instance. It can be useful for scripts
@@ -196,9 +263,32 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
 
     /**
      * @method
-     * @returns {string} content of currently loaded note in the editor (HTML, code etc.)
+     * @returns {NoteFull} active note (loaded into right pane)
      */
-    this.getCurrentNoteContent = noteDetailService.getCurrentNoteContent;
+    this.getActiveNote = noteDetailService.getActiveNote;
+
+    /**
+     * @method
+     * @returns {Promise<string|null>} returns note path of active note or null if there isn't active note
+     */
+    this.getActiveNotePath = () => {
+        const activeTabContext = noteDetailService.getActiveTabContext();
+
+        return activeTabContext ? activeTabContext.notePath : null;
+    };
+
+    /**
+     * This method checks whether user navigated away from the note from which the scripts has been started.
+     * This is necessary because script execution is async and by the time it is finished, the user might have
+     * already navigated away from this page - the end result would be that script might return data for the wrong
+     * note.
+     *
+     * @method
+     * @return {boolean} returns true if the original note is still loaded, false if user switched to another
+     */
+    this.isNoteStillActive = () => {
+        return this.originEntity.noteId === tabContext.noteId;
+    };
 
     /**
      * @method
@@ -223,6 +313,52 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null) {
      * @param {array} types - list of mime types to be used
      */
     this.setCodeMimeTypes = noteTypeService.setCodeMimeTypes;
+
+    /**
+     * @method
+     * @param {object} $el - jquery object on which to setup the tooltip
+     */
+    this.setupElementTooltip = noteTooltipService.setupElementTooltip;
+
+    /**
+     * @method
+     */
+    this.protectActiveNote = protectedSessionService.protectNoteAndSendToServer;
+
+    /**
+     * Returns date-note for today. If it doesn't exist, it is automatically created.
+     *
+     * @method
+     * @return {Promise<NoteShort>}
+     */
+    this.getTodayNote = dateNotesService.getTodayNote;
+
+    /**
+     * Returns date-note. If it doesn't exist, it is automatically created.
+     *
+     * @method
+     * @param {string} date - e.g. "2019-04-29"
+     * @return {Promise<NoteShort>}
+     */
+    this.getDateNote = dateNotesService.getDateNote;
+
+    /**
+     * Returns month-note. If it doesn't exist, it is automatically created.
+     *
+     * @method
+     * @param {string} month - e.g. "2019-04"
+     * @return {Promise<NoteShort>}
+     */
+    this.getMonthNote = dateNotesService.getMonthNote;
+
+    /**
+     * Returns year-note. If it doesn't exist, it is automatically created.
+     *
+     * @method
+     * @param {string} year - e.g. "2019"
+     * @return {Promise<NoteShort>}
+     */
+    this.getYearNote = dateNotesService.getYearNote;
 }
 
 export default FrontendScriptApi;

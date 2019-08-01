@@ -1,43 +1,31 @@
 import treeService from '../services/tree.js';
 import searchNotesService from '../services/search_notes.js';
-import noteautocompleteService from '../services/note_autocomplete.js';
-import linkService from "../services/link.js";
+import noteAutocompleteService from '../services/note_autocomplete.js';
+import utils from "../services/utils.js";
 
 const $dialog = $("#jump-to-note-dialog");
 const $autoComplete = $("#jump-to-note-autocomplete");
 const $showInFullTextButton = $("#show-in-full-text-button");
-const $showRecentNotesButton = $dialog.find(".show-recent-notes-button");
 
 async function showDialog() {
+    utils.closeActiveDialog();
+
     glob.activeDialog = $dialog;
 
     $autoComplete.val('');
 
-    $dialog.dialog({
-        modal: true,
-        width: 800,
-        position: { my: "center top+100", at: "top", of: window }
-    });
+    $dialog.modal();
 
-    await $autoComplete.autocomplete({
-        source: noteautocompleteService.autocompleteSource,
-        focus: event => event.preventDefault(),
-        minLength: 0,
-        autoFocus: true,
-        select: function (event, ui) {
-            if (ui.item.value === 'No results') {
+    noteAutocompleteService.initNoteAutocomplete($autoComplete, { hideGoToSelectedNoteButton: true })
+        .on('autocomplete:selected', function(event, suggestion, dataset) {
+            if (!suggestion.path) {
                 return false;
             }
 
-            const notePath = linkService.getNotePathFromLabel(ui.item.value);
+            treeService.activateNote(suggestion.path);
+        });
 
-            treeService.activateNote(notePath);
-
-            $dialog.dialog('close');
-        }
-    });
-
-    showRecentNotes();
+    noteAutocompleteService.showRecentNotes($autoComplete);
 }
 
 function showInFullText(e) {
@@ -51,16 +39,11 @@ function showInFullText(e) {
     searchNotesService.showSearch();
     searchNotesService.doSearch(searchText);
 
-    $dialog.dialog('close');
+    $dialog.modal('hide');
 }
 
-function showRecentNotes() {
-    $autoComplete.autocomplete("search", "");
-}
 
 $showInFullTextButton.click(showInFullText);
-
-$showRecentNotesButton.click(showRecentNotes);
 
 $dialog.bind('keydown', 'ctrl+return', showInFullText);
 

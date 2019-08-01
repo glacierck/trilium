@@ -6,20 +6,28 @@ const resourceDir = require('./resource_dir');
 const appInfo = require('./app_info');
 const sql = require('./sql');
 const cls = require('./cls');
+const utils = require('./utils');
 const optionService = require('./options');
 const Option = require('../entities/option');
+const ImportContext = require('../services/import_context');
 
 async function createConnection() {
     return await sqlite.open(dataDir.DOCUMENT_PATH, {Promise});
 }
 
+const dbConnection = new Promise(async (resolve, reject) => {
+    // no need to create new connection now since DB stays the same all the time
+    const db = await createConnection();
+    sql.setDbConnection(db);
+
+    resolve();
+});
+
 let dbReadyResolve = null;
 const dbReady = new Promise(async (resolve, reject) => {
     dbReadyResolve = resolve;
 
-    // no need to create new connection now since DB stays the same all the time
-    const db = await createConnection();
-    sql.setDbConnection(db);
+    await dbConnection;
 
     initDbConnection();
 });
@@ -51,6 +59,14 @@ async function initDbConnection() {
 
         await sql.execute("PRAGMA foreign_keys = ON");
 
+        const currentDbVersion = await getDbVersion();
+
+        if (currentDbVersion > appInfo.dbVersion) {
+            log.error(`Current DB version ${currentDbVersion} is newer than app db version ${appInfo.dbVersion} which means that it was created by newer and incompatible version of Trilium. Upgrade to latest version of Trilium to resolve this issue.`);
+
+            utils.crash();
+        }
+
         if (!await isDbUpToDate()) {
             // avoiding circular dependency
             const migrationService = require('./migration');
@@ -71,19 +87,35 @@ async function createInitialDatabase(username, password) {
     }
 
     const schema = fs.readFileSync(resourceDir.DB_INIT_DIR + '/schema.sql', 'UTF-8');
-    const notesSql = fs.readFileSync(resourceDir.DB_INIT_DIR + '/main_notes.sql', 'UTF-8');
-    const notesTreeSql = fs.readFileSync(resourceDir.DB_INIT_DIR + '/main_branches.sql', 'UTF-8');
-    const imagesSql = fs.readFileSync(resourceDir.DB_INIT_DIR + '/main_images.sql', 'UTF-8');
-    const notesImageSql = fs.readFileSync(resourceDir.DB_INIT_DIR + '/main_note_images.sql', 'UTF-8');
-    const attributesSql = fs.readFileSync(resourceDir.DB_INIT_DIR + '/main_attributes.sql', 'UTF-8');
+    const demoFile = fs.readFileSync(resourceDir.DB_INIT_DIR + '/demo.tar');
 
     await sql.transactional(async () => {
         await sql.executeScript(schema);
-        await sql.executeScript(notesSql);
-        await sql.executeScript(notesTreeSql);
-        await sql.executeScript(imagesSql);
-        await sql.executeScript(notesImageSql);
-        await sql.executeScript(attributesSql);
+
+        const Note = require("../entities/note");
+        const Branch = require("../entities/branch");
+
+        const rootNote = await new Note({
+            noteId: 'root',
+            title: 'root',
+            type: 'text',
+            mime: 'text/html'
+        }).save();
+
+        await rootNote.setContent('');
+
+        await new Branch({
+            branchId: 'root',
+            noteId: 'root',
+            parentNoteId: 'none',
+            isExpanded: true,
+            notePosition: 0
+        }).save();
+
+        const dummyImportContext = new ImportContext("1", false);
+
+        const tarImportService = require("./import/tar");
+        await tarImportService.importTar(dummyImportContext, demoFile, rootNote);
 
         const startNoteId = await sql.getValue("SELECT noteId FROM branches WHERE parentNoteId = 'root' AND isDeleted = 0 ORDER BY notePosition");
 
@@ -124,8 +156,12 @@ async function createDatabaseForSync(options, syncServerHost = '', syncProxy = '
     log.info("Schema and not synced options generated.");
 }
 
+async function getDbVersion() {
+    return parseInt(await sql.getValue("SELECT value FROM options WHERE name = 'dbVersion'"));
+}
+
 async function isDbUpToDate() {
-    const dbVersion = parseInt(await sql.getValue("SELECT value FROM options WHERE name = 'dbVersion'"));
+    const dbVersion = await getDbVersion();
 
     const upToDate = dbVersion >= appInfo.dbVersion;
 
@@ -142,8 +178,13 @@ async function dbInitialized() {
     await initDbConnection();
 }
 
+dbReady.then(async () => {
+    log.info("DB size: " + await sql.getValue("SELECT page_count * page_size / 1000 as size FROM pragma_page_count(), pragma_page_size()") + " KB");
+});
+
 module.exports = {
     dbReady,
+    dbConnection,
     schemaExists,
     isDbInitialized,
     initDbConnection,
