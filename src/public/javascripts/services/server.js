@@ -83,7 +83,7 @@ async function ajax(url, method, data) {
     }
 
     return await $.ajax(options).catch(e => {
-        const message = "Error when calling " + method + " " + url + ": " + e.status + " - " + e.statusText;
+        const message = "错误请求 " + method + " " + url + ": " + e.status + " - " + e.statusText;
         infoService.showError(message);
         infoService.throwError(message);
     });

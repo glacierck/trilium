@@ -9,35 +9,35 @@
 <div id="container" style="display: none; grid-template-columns: <%= leftPaneWidthPercent %>fr <%= rightPaneWidthPercent %>fr">
     <div id="header" class="hide-toggle">
         <div id="history-navigation" style="display: none;">
-            <a id="history-back-button" title="Go to previous note." class="icon-action jam jam-arrow-square-left"></a>
+            <a id="history-back-button" title="转到上一个笔记。" class="icon-action jam jam-arrow-square-left"></a>
 
             &nbsp;
 
-            <a id="history-forward-button" title="Go to next note." class="icon-action jam jam-arrow-square-right"></a>
+            <a id="history-forward-button" title="转到下一个笔记。" class="icon-action jam jam-arrow-square-right"></a>
         </div>
 
         <div style="flex-grow: 100; display: flex;">
             <button class="btn btn-sm" id="jump-to-note-dialog-button" title="CTRL+J">
                 <span class="jam jam-direction"></span>
-                Jump to note
+                打开笔记
             </button>
 
             <button class="btn btn-sm" id="recent-changes-button">
                 <span class="jam jam-history"></span>
 
-                Recent changes
+                近期修改
             </button>
 
-            <button class="btn btn-sm" id="enter-protected-session-button" title="Enter protected session to be able to find and view protected notes">
+            <button class="btn btn-sm" id="enter-protected-session-button" title="进入受保护会话状态，能够查找和查看受保护的笔记">
                 <span class="jam jam-door"></span>
 
-                Enter protected session
+                进入受保护会话状态
             </button>
 
-            <button class="btn btn-sm" id="leave-protected-session-button" title="Leave protected session so that protected notes are not accessible any more." style="display: none;">
+            <button class="btn btn-sm" id="leave-protected-session-button" title="退出受保护会话状态，不再可以访问受保护的笔记。" style="display: none;">
                 <span class="jam jam-log-out"></span>
 
-                Leave protected session
+                离开受保护会话状态
             </button>
         </div>
 
@@ -48,58 +48,58 @@
             <div class="dropdown" id="global-menu">
                 <button type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-sm dropdown-toggle">
                     <span class="jam jam-align-justify"></span>
-                    Menu
+                    菜单
                     <span class="caret"></span>
                 </button>
                 <div class="dropdown-menu dropdown-menu-right">
                     <a class="dropdown-item" id="options-button">
                         <span class="jam jam-settings-alt"></span>
-                        Options
+                        选项
                     </a>
 
-                    <a class="dropdown-item" id="sync-now-button" title="Trigger sync">
+                    <a class="dropdown-item" id="sync-now-button" title="触发同步">
                         <span class="jam jam-refresh"></span>
-                        Sync (<span id="outstanding-syncs-count">0</span>)
+                        同步 (<span id="outstanding-syncs-count">0</span>)
                     </a>
 
                     <a class="dropdown-item" id="open-dev-tools-button">
                         <span class="jam jam-terminal"></span>
-                        Open Dev Tools
+                        打开开发工具
                         <kbd>CTRL+SHIFT+I</kbd>
                     </a>
 
                     <a class="dropdown-item" id="open-sql-console-button">
                         <span class="jam jam-database"></span>
-                        Open SQL Console
+                        打开SQL控制台
                         <kbd>ALT+O</kbd>
                     </a>
 
-                    <a class="dropdown-item" id="reload-frontend-button" title="Reload can help with some visual glitches without restarting the whole app.">
+                    <a class="dropdown-item" id="reload-frontend-button" title="重新加载可以帮助解决一些视觉故障，而无需重新启动整个应用程序。">
                         <span class="jam jam-empty"></span>
-                        Reload frontend
+                        重新加载页面
                         <kbd>CTRL-R</kbd>
                     </a>
 
                     <a class="dropdown-item" id="toggle-fullscreen-button">
                         <span class="jam jam-empty"></span>
-                        Toggle fullscreen
+                        全屏
                         <kbd>F11</kbd>
                     </a>
 
                     <a class="dropdown-item" id="show-help-button">
                         <span class="jam jam-help"></span>
-                        Show Help
+                        帮助
                         <kbd>F1</kbd>
                     </a>
 
                     <a class="dropdown-item" id="show-about-dialog-button">
                         <span class="jam jam-empty"></span>
-                        About Trilium Notes
+                        关于Trilium 笔记
                     </a>
 
                     <a class="dropdown-item" id="logout-button">
                         <span class="jam jam-log-out"></span>
-                        Logout
+                        登出
                     </a>
                 </div>
             </div>
@@ -108,23 +108,23 @@
 
     <div id="left-pane" class="hide-toggle" style="resize: horizontal; overflow: scroll;">
         <div id="global-buttons">
-            <a id="create-top-level-note-button" title="Create new top level note" class="icon-action jam jam-plus-circle"></a>
+            <a id="create-top-level-note-button" title="创建新的顶级笔记" class="icon-action jam jam-plus-circle"></a>
 
-            <a id="collapse-tree-button" title="Collapse note tree. Shortcut ALT+C" class="icon-action jam jam-layers"></a>
+            <a id="collapse-tree-button" title="折叠笔记树。快捷方式ALT + C。" class="icon-action jam jam-layers"></a>
 
-            <a id="scroll-to-active-note-button" title="Scroll to active note. Shortcut CTRL+." class="icon-action jam jam-download"></a>
+            <a id="scroll-to-active-note-button" title="滚动到当前笔记。快捷键CTRL +。" class="icon-action jam jam-download"></a>
 
-            <a id="toggle-search-button" title="Search in notes. Shortcut CTRL+S" class="icon-action jam jam-search"></a>
+            <a id="toggle-search-button" title="在笔记中搜索。快捷键CTRL + S。" class="icon-action jam jam-search"></a>
         </div>
 
         <div id="search-box">
             <div class="form-group">
                 <div class="input-group">
                     <input name="search-text" id="search-text" class="form-control"
-                           placeholder="Search text, labels" autocomplete="off">
+                           placeholder="搜索文字，标签" autocomplete="off">
 
                     <div class="input-group-append">
-                        <button id="do-search-button" class="btn btn-sm icon-button jam jam-search" title="Search (enter)"></button>
+                        <button id="do-search-button" class="btn btn-sm icon-button jam jam-search" title="搜索 (enter)"></button>
                     </div>
                 </div>
             </div>
@@ -132,10 +132,10 @@
 
             <div style="display: flex; align-items: center; justify-content: space-evenly; flex-wrap: wrap;">
                 <button id="save-search-button" class="btn btn-sm"
-                    title="This will create new saved search note under active note.">
-                    <span class="jam jam-save"></span> Save search</button>
+                    title="记录搜索方案。">
+                    <span class="jam jam-save"></span> 保存搜索</button>
 
-                <button id="close-search-button" class="btn btn-sm"><span class="jam jam-close"></span> Close search</button>
+                <button id="close-search-button" class="btn btn-sm"><span class="jam jam-close"></span> 关闭搜索</button>
             </div>
         </div>
 

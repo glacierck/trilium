@@ -31,10 +31,10 @@ class LinkMapWidget {
         this.ctx = ctx;
         this.$widget = $widget;
         this.$title = this.$widget.find('.widget-title');
-        this.$title.text("Link map");
+        this.$title.text("链接地图");
         this.$headerActions = this.$widget.find('.widget-header-actions');
 
-        const $showFullButton = $("<a>").append("show full").addClass('widget-header-action');
+        const $showFullButton = $("<a>").append("显示完整").addClass('widget-header-action');
         $showFullButton.click(() => {
             linkMapDialog.showDialog();
         });

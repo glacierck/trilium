@@ -38,7 +38,7 @@ async function setupProtectedSession(password) {
     const response = await enterProtectedSessionOnServer(password);
 
     if (!response.success) {
-        infoService.showError("Wrong password.", 3000);
+        infoService.showError("密码错误。", 3000);
         return;
     }
 
@@ -61,7 +61,7 @@ async function setupProtectedSession(password) {
     $enterProtectedSessionButton.hide();
     $leaveProtectedSessionButton.show();
 
-    infoService.showMessage("Protected session has been started.");
+    infoService.showMessage("已启动受保护的会话。");
 }
 
 async function enterProtectedSessionOnServer(password) {
@@ -91,7 +91,7 @@ async function unprotectNoteAndSendToServer() {
     const activeNote = noteDetailService.getActiveNote();
 
     if (!activeNote.isProtected) {
-        infoService.showAndLogError(`Note ${activeNote.noteId} is not protected`);
+        infoService.showAndLogError(`笔记 ${activeNote.noteId} 未受保护`);
 
         return;
     }
@@ -119,7 +119,7 @@ async function protectSubtree(noteId, protect) {
 
     await server.put('notes/' + noteId + "/protect/" + (protect ? 1 : 0));
 
-    infoService.showMessage("Request to un/protect sub tree has finished successfully");
+    infoService.showMessage("解除/启动保护子目录树的请求成功。");
 
     treeService.reload();
     noteDetailService.reload();

@@ -111,9 +111,9 @@ class NoteDetailRelationMap {
             contextMenuWidget.initContextMenu(e, {
                 getContextMenuItems: () => {
                     return [
-                        {title: "Open in new tab", cmd: "open-in-new-tab", uiIcon: "empty"},
-                        {title: "Remove note", cmd: "remove", uiIcon: "trash"},
-                        {title: "Edit title", cmd: "edit-title", uiIcon: "pencil"},
+                        {title: "在新页签中打开", cmd: "open-in-new-tab", uiIcon: "empty"},
+                        {title: "删除笔记", cmd: "remove", uiIcon: "trash"},
+                        {title: "编辑标题", cmd: "edit-title", uiIcon: "pencil"},
                     ];
                 },
                 selectContextMenuItem: (event, cmd) => this.tabContextMenuHandler(event, cmd)
@@ -136,7 +136,7 @@ class NoteDetailRelationMap {
                 target: 'into'
             });
 
-            infoService.showMessage("Click on canvas to place new note");
+            infoService.showMessage("单击画布以放置新笔记");
 
             // reloading tree so that the new note appears there
             // no need to wait for it to finish
@@ -185,7 +185,7 @@ class NoteDetailRelationMap {
         }
         else if (cmd === "edit-title") {
             const title = await promptDialog.ask({
-                message: "Enter new note title:",
+                message: "输入新的标题:",
                 defaultValue: $title.text()
             });
 
@@ -425,11 +425,11 @@ class NoteDetailRelationMap {
 
                 contextMenuWidget.initContextMenu(event, {
                     getContextMenuItems: () => {
-                        return [ {title: "Remove relation", cmd: "remove", uiIcon: "trash"} ];
+                        return [ {title: "删除关系", cmd: "remove", uiIcon: "trash"} ];
                     },
                     selectContextMenuItem: async (event, cmd) => {
                         if (cmd === 'remove') {
-                            if (!await confirmDialog.confirm("Are you sure you want to remove the relation?")) {
+                            if (!await confirmDialog.confirm("您确定要删除该关系吗？")) {
                                 return;
                             }
 
@@ -575,7 +575,7 @@ class NoteDetailRelationMap {
             const exists = this.mapData.notes.some(n => n.noteId === note.noteId);
 
             if (exists) {
-                infoService.showError(`Note "${note.title}" is already in the diagram.`);
+                infoService.showError(`笔记 "${note.title}" 已经在图中了`);
 
                 continue;
             }

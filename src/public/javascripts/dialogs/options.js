@@ -35,7 +35,7 @@ async function showDialog() {
 async function saveOptions(options) {
     await server.put('options', options);
 
-    infoService.showMessage("Options change have been saved.");
+    infoService.showMessage("选项更改已保存");
 }
 
 export default {
@@ -57,9 +57,9 @@ addTabHandler((function() {
 
     async function optionsLoaded(options) {
         const themes = [
-            { val: 'white', title: 'White' },
-            { val: 'dark', title: 'Dark' },
-            { val: 'black', title: 'Black' }
+            { val: 'white', title: '白色' },
+            { val: 'dark', title: '暗' },
+            { val: 'black', title: '黑色' }
         ].concat(await server.get('options/user-themes'));
 
         $themeSelect.empty();
@@ -290,7 +290,7 @@ addTabHandler((function() {
             infoService.showMessage(result.message);
         }
         else {
-            infoService.showError("Sync server handshake failed, error: " + result.message);
+            infoService.showError("同步服务器握手失败，错误信息： " + result.message);
         }
     });
 
@@ -310,27 +310,27 @@ addTabHandler((async function () {
     $forceFullSyncButton.click(async () => {
         await server.post('sync/force-full-sync');
 
-        infoService.showMessage("Full sync triggered");
+        infoService.showMessage("完全同步启动");
     });
 
     $fillSyncRowsButton.click(async () => {
         await server.post('sync/fill-sync-rows');
 
-        infoService.showMessage("Sync rows filled successfully");
+        infoService.showMessage("同步行已成功填充");
     });
 
 
     $anonymizeButton.click(async () => {
         await server.post('anonymization/anonymize');
 
-        infoService.showMessage("Created anonymized database");
+        infoService.showMessage("创建匿名数据库");
     });
 
     $cleanupSoftDeletedButton.click(async () => {
         if (confirm("Do you really want to clean up soft-deleted items?")) {
             await server.post('cleanup/cleanup-soft-deleted-items');
 
-            infoService.showMessage("Soft deleted items have been cleaned up");
+            infoService.showMessage("已删除软删除的项目");
         }
     });
 
@@ -338,14 +338,14 @@ addTabHandler((async function () {
         if (confirm("Do you really want to clean up unused images?")) {
             await server.post('cleanup/cleanup-unused-images');
 
-            infoService.showMessage("Unused images have been cleaned up");
+            infoService.showMessage("已清理未使用的图像");
         }
     });
 
     $vacuumDatabaseButton.click(async () => {
         await server.post('cleanup/vacuum-database');
 
-        infoService.showMessage("Database has been vacuumed");
+        infoService.showMessage("数据库已被清理干净");
     });
 
     return {};

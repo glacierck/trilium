@@ -17,7 +17,7 @@ async function executeBundle(bundle, originEntity, tabContext) {
         }.call(apiContext));
     }
     catch (e) {
-        infoService.showAndLogError(`Execution of ${bundle.noteId} failed with error: ${e.message}`);
+        infoService.showAndLogError(`执行 ${bundle.noteId} 错误: ${e.message}`);
     }
 }
 

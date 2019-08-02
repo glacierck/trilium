@@ -22,7 +22,7 @@ async function convertMarkdownToHtml(text) {
 
     textEditor.model.insertContent(modelFragment, textEditor.model.document.selection);
 
-    infoService.showMessage("Markdown content has been imported into the document.");
+    infoService.showMessage("Markdown内容已导入文档");
 }
 
 async function importMarkdownInline() {

@@ -12,7 +12,7 @@ async function autocompleteSource(term, cb) {
 
     if (result.length === 0) {
         result.push({
-            title: "No results",
+            title: "没有结果",
             path: ""
         });
     }
@@ -49,12 +49,12 @@ function initNoteAutocomplete($el, options) {
     $el.addClass("note-autocomplete-input");
 
     const $clearTextButton = $("<a>")
-            .addClass("input-group-text input-clearer-button jam jam-close")
-            .prop("title", "Clear text field");
+        .addClass("input-group-text input-clearer-button jam jam-close")
+        .prop("title", "Clear text field");
 
     const $showRecentNotesButton = $("<a>")
-            .addClass("input-group-text show-recent-notes-button jam jam-clock")
-            .prop("title", "Show recent notes");
+        .addClass("input-group-text show-recent-notes-button jam jam-clock")
+        .prop("title", "显示最近的笔记");
 
     const $goToSelectedNoteButton = $("<a>")
         .addClass("input-group-text go-to-selected-note-button jam jam-arrow-right")

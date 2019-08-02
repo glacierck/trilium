@@ -132,7 +132,7 @@ messagingService.subscribeToMessages(async message => {
     else if (message.type === 'export-finished') {
         $dialog.modal('hide');
 
-        infoService.showMessage("Export finished successfully.");
+        infoService.showMessage("导出完成");
     }
 });
 

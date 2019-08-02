@@ -442,8 +442,8 @@ $(tabRow.el).on('contextmenu', '.note-tab', e => {
     contextMenuService.initContextMenu(e, {
         getContextMenuItems: () => {
             return [
-                {title: "Close all tabs", cmd: "removeAllTabs", uiIcon: "empty"},
-                {title: "Close all tabs except for this", cmd: "removeAllTabsExceptForThis", uiIcon: "empty"}
+                {title: "关闭所有页签", cmd: "removeAllTabs", uiIcon: "empty"},
+                {title: "关闭除此之外的所有页签", cmd: "removeAllTabsExceptForThis", uiIcon: "empty"}
             ];
         },
         selectContextMenuItem: (e, cmd) => {

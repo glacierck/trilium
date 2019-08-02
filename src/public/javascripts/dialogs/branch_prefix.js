@@ -38,7 +38,7 @@ async function savePrefix() {
 
     $dialog.modal('hide');
 
-    infoService.showMessage("Branch prefix has been saved.");
+    infoService.showMessage("分支前缀已保存");
 }
 
 $form.submit(() => {

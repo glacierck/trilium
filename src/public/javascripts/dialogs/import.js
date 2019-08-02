@@ -102,7 +102,7 @@ async function uploadFiles(importNoteId, files, options) {
         }));
     }
 
-    infoService.showMessage("Import finished successfully.");
+    infoService.showMessage("导入完成");
 
     await treeService.reloadNote(importNoteId);
 

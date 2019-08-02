@@ -1,19 +1,19 @@
 const TPL = `
 <table class="note-info-table">
     <tr>
-        <th>Note ID</th>
+        <th>笔记 ID</th>
         <td class="note-info-note-id"></td>
     </tr>
     <tr>
-        <th>Created</th>
+        <th>创建日期</th>
         <td class="note-info-date-created"></td>
     </tr>
     <tr>
-        <th>Modified</th>
+        <th>修改日期</th>
         <td class="note-info-date-modified"></td>
     </tr>
     <tr>
-        <th>Type</th>
+        <th>类型</th>
         <td class="note-info-type"></td>
     </tr>
     <tr>
@@ -32,7 +32,7 @@ class NoteInfoWidget {
         this.ctx = ctx;
         this.$widget = $widget;
         this.$title = this.$widget.find('.widget-title');
-        this.$title.text("Note info");
+        this.$title.text("笔记信息");
     }
 
     async renderBody() {

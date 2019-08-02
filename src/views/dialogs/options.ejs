@@ -11,38 +11,38 @@
                 <div>
                     <ul class="nav nav-tabs">
                         <li class="nav-item">
-                            <a class="nav-link active" data-toggle="tab" href="#appearance">Appearance</a>
+                            <a class="nav-link active" data-toggle="tab" href="#appearance">外形</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-toggle="tab" href="#change-password">Change password</a>
+                            <a class="nav-link" data-toggle="tab" href="#change-password">更改密码</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-toggle="tab" href="#protected-session-timeout">Protected session</a>
+                            <a class="nav-link" data-toggle="tab" href="#protected-session-timeout">受保护的会话</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-toggle="tab" href="#note-revision-snapshot-time-interval">Note revisions</a>
+                            <a class="nav-link" data-toggle="tab" href="#note-revision-snapshot-time-interval">笔记修订</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-toggle="tab" href="#sync-setup">Sync</a>
+                            <a class="nav-link" data-toggle="tab" href="#sync-setup">同步</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-toggle="tab" href="#advanced">Advanced</a>
+                            <a class="nav-link" data-toggle="tab" href="#advanced">高级</a>
                         </li>
                     </ul>
                     <br/>
                     <div class="tab-content">
                         <div id="appearance" class="tab-pane active">
-                            <p><strong>Settings on this options tab are saved automatically after each change.</strong></p>
+                            <p><strong>每次更改后，此选项选项卡上的设置将自动保存。</strong></p>
 
                             <form>
                                 <div class="form-group row">
                                     <div class="col-4">
-                                        <label for="theme-select">Theme</label>
+                                        <label for="theme-select">主题</label>
                                         <select class="form-control" id="theme-select"></select>
                                     </div>
 
                                     <div class="col-4">
-                                        <label for="zoom-factor-select">Zoom factor (desktop build only)</label>
+                                        <label for="zoom-factor-select">缩放系数(desktop build only)</label>
 
                                         <input type="number" class="form-control" id="zoom-factor-select" min="0.3" max="2.0" step="0.1"/>
                                     </div>
@@ -56,9 +56,9 @@
                                     </div>
                                 </div>
 
-                                <p>Zooming can be controlled with CTRL-+ and CTRL-= shortcuts as well.</p>
+                                <p>也可以使用CTRL- +和CTRL- =快捷方式控制缩放。</p>
 
-                                <h3>Font sizes</h3>
+                                <h3>字体大小</h3>
 
                                 <div class="form-group row">
                                     <div class="col-4">
@@ -97,7 +97,7 @@
 
                                 <p>Note that tree and detail font sizing is relative to the main font size setting.</p>
 
-                                <h3>Left pane sizing</h3>
+                                <h3>左栏目大小调整</h3>
 
                                 <div class="form-group row">
                                     <div class="col-6">
@@ -113,7 +113,9 @@
                                     </div>
                                 </div>
 
-                                <p>Left pane width is calculated from the percent of window size, if this is smaller than minimum width, then minimum width is used. If you want to have fixed width left pane, set minimum width to the desired width and set percent to 0.</p>
+                                <p>
+                                左栏目宽度是根据窗口大小的百分比计算的，如果小于最小宽度，则使用最小宽度。如果要在左窗格中使用固定宽度，请将最小宽度设置为所需宽度，并将百分比设置为0。
+                                </p>
 
                             </form>
                         </div>
@@ -121,120 +123,118 @@
                         <div id="change-password" class="tab-pane">
                             <form id="change-password-form">
                                 <div class="form-group">
-                                    <label for="old-password">Old password</label>
+                                    <label for="old-password">旧密码</label>
                                     <input class="form-control" id="old-password" type="password">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="new-password1">New password</label>
+                                    <label for="new-password1">新密码</label>
                                     <input class="form-control" id="new-password1" type="password">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="new-password2">New password once more</label>
+                                    <label for="new-password2">再次输入新密码</label>
                                     <input class="form-control" id="new-password2" type="password">
                                 </div>
 
-                                <button class="btn btn-primary">Change password</button>
+                                <button class="btn btn-primary">更改</button>
                             </form>
                         </div>
 
                         <div id="protected-session-timeout" class="tab-pane">
-                            <p>Protected session timeout is a time period after which the protected session is wiped out from
-                                browser's memory. This is measured from the last interaction with protected notes.</p>
+                            <p>保存保护访问状态时间超时。从上次与受保护笔记的交互开始计算。</p>
 
                             <form id="protected-session-timeout-form">
                                 <div class="form-group">
-                                    <label for="protected-session-timeout-in-seconds">Protected session timeout (in seconds)</label>
+                                    <label for="protected-session-timeout-in-seconds">保存登陆状态时间（以秒为单位）</label>
                                     <input class="form-control" id="protected-session-timeout-in-seconds" type="number">
                                 </div>
 
                                 <div style="display: flex; justify-content: space-between;">
-                                    <button class="btn btn-primary">Save</button>
+                                    <button class="btn btn-primary">保存</button>
 
-                                    <button class="btn btn-secondary" type="button" data-help-page="Protected-notes">Help</button>
+                                    <button class="btn btn-secondary" type="button" data-help-page="Protected-notes">帮助</button>
                                 </div>
                             </form>
                         </div>
 
                         <div id="note-revision-snapshot-time-interval" class="tab-pane">
-                            <p>Note revision snapshot time interval is time in seconds after which new note revision will be created for the note.</p>
+                            <p>笔记修订快照时间间隔是以秒为单位的时间，之后将为该笔记创建新的笔记修订快照。</p>
 
                             <form id="note-revision-snapshot-time-interval-form">
                                 <div class="form-group">
-                                    <label for="note-revision-snapshot-time-interval-in-seconds">Note revision snapshot time interval (in seconds)</label>
+                                    <label for="note-revision-snapshot-time-interval-in-seconds">笔记修订快照时间间隔（以秒为单位）</label>
                                     <input class="form-control" id="note-revision-snapshot-time-interval-in-seconds" type="number">
                                 </div>
 
                                 <div style="display: flex; justify-content: space-between;">
-                                    <button class="btn btn-primary">Save</button>
+                                    <button class="btn btn-primary">保存</button>
 
-                                    <button class="btn btn-secondary" type="button" data-help-page="Note-revisions">Help</button>
+                                    <button class="btn btn-secondary" type="button" data-help-page="Note-revisions">帮助</button>
                                 </div>
                             </form>
                         </div>
 
                         <div id="sync-setup" class="tab-pane">
-                            <h4 style="margin-top: 0px;">Sync configuration</h4>
+                            <h4 style="margin-top: 0px;">同步配置</h4>
 
                             <form id="sync-setup-form">
                                 <div class="form-group">
-                                    <label for="sync-server-host">Server instance address</label>
+                                    <label for="sync-server-host">服务器实例地址</label>
                                     <input class="form-control" id="sync-server-host" placeholder="https://<host>:<port>">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="sync-server-timeout">Sync timeout (milliseconds)</label>
+                                    <label for="sync-server-timeout">同步超时 (毫秒)</label>
                                     <input class="form-control" id="sync-server-timeout" min="1" max="10000000" type="number">
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="sync-proxy">Sync proxy server (optional)</label>
+                                    <label for="sync-proxy">同步代理服务器 (optional)</label>
                                     <input class="form-control" id="sync-proxy" placeholder="https://<host>:<port>">
 
                                     <p><strong>Note:</strong> If you leave proxy setting blank, system proxy will be used (applies to desktop/electron build only)</p>
                                 </div>
 
                                 <div style="display: flex; justify-content: space-between;">
-                                    <button class="btn btn-primary">Save</button>
+                                    <button class="btn btn-primary">保存</button>
 
-                                    <button class="btn btn-secondary" type="button" data-help-page="Synchronization">Help</button>
+                                    <button class="btn btn-secondary" type="button" data-help-page="Synchronization">帮助</button>
                                 </div>
                             </form>
 
                             <br/>
 
-                            <h4>Sync test</h4>
+                            <h4>同步测试</h4>
 
-                            <p>This will test connection and handshake to the sync server. If sync server isn't initialized, this will set it up to sync with local document.</p>
+                            <p>这将测试与同步服务器的连接和握手。如果未初始化同步服务器，则会将其设置为与本地文档同步。</p>
 
-                            <button id="test-sync-button" class="btn btn-secondary">Test sync</button>
+                            <button id="test-sync-button" class="btn btn-secondary">测试同步</button>
                         </div>
 
                         <div id="advanced" class="tab-pane">
                             <h4 style="margin-top: 0px;">Sync</h4>
-                            <button id="force-full-sync-button" class="btn btn-secondary">Force full sync</button>
+                            <button id="force-full-sync-button" class="btn btn-secondary">强制全量同步</button>
 
                             <br/>
                             <br/>
 
-                            <button id="fill-sync-rows-button" class="btn btn-secondary">Fill sync rows</button>
+                            <button id="fill-sync-rows-button" class="btn btn-secondary">填充同步行</button>
 
                             <br/>
                             <br/>
 
-                            <h4>Debugging</h4>
+                            <h4>调试</h4>
 
-                            <button id="anonymize-button" class="btn btn-secondary">Save anonymized database</button><br/><br/>
+                            <button id="anonymize-button" class="btn btn-secondary">保存匿名数据库</button><br/><br/>
 
-                            <p>This action will create a new copy of the database and anonymise it (remove all note content and leave only structure and metadata)
-                                for sharing online for debugging purposes without fear of leaking your personal data.</p>
+                            <p>此操作将创建数据库的新副本，并将其匿名化（删除所有笔记内容并仅保留结构和元数据），以便在线共享以进行调试，而不必担心泄露您的个人数据。</p>
 
-                            <h4>Vacuum database</h4>
+                            <h4>清空数据库</h4>
 
-                            <p>This will rebuild database which will typically result in smaller database file. No data will be actually changed.</p>
+                            <p>这将重建数据库，这通常会导致较小的数据库文件。实际上不会更改数据。</p>
 
-                            <button id="vacuum-database-button" class="btn btn-secondary">Vacuum database</button>
+                            <button id="vacuum-database-button" class="btn btn-secondary">清空数据库</button>
                         </div>
                     </div>
                 </div>

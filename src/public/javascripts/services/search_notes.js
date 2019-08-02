@@ -13,17 +13,17 @@ const $searchResultsInner = $("#search-results-inner");
 const $closeSearchButton = $("#close-search-button");
 
 const helpText = `
-<strong>Search tips</strong> - also see <button class="btn btn-sm" type="button" data-help-page="Search">complete help on search</button>
+<strong>搜索技巧</strong> - 另请参见 <button class="btn btn-sm" type="button" data-help-page="Search">complete help on search</button>
 <p>
 <ul>
-    <li>Just enter any text for full text search</li>
-    <li><code>@abc</code> - returns notes with label abc</li>
-    <li><code>@year=2019</code> - matches notes with label <code>year</code> having value <code>2019</code></li>
-    <li><code>@rock @pop</code> - matches notes which have both <code>rock</code> and <code>pop</code> labels</li>
-    <li><code>@rock or @pop</code> - only one of the labels must be present</li>
-    <li><code>@year&lt;=2000</code> - numerical comparison (also &gt;, &gt;=, &lt;).</li>
-    <li><code>@dateCreated>=MONTH-1</code> - notes created in the last month</li>
-    <li><code>=handler</code> - will execute script defined in <code>handler</code> relation to get results</li>
+    <li>只需输入任何文本进行全文搜索</li>
+    <li><code>@abc</code> - 返回标签为abc的笔记</li>
+    <li><code>@year=2019</code> - 返回与标签 <code>year</code> 中值为 <code>2019</code>关联的笔记</li>
+    <li><code>@rock @pop</code> - 返回同时满足多个标签的笔记 <code>rock</code> 和 <code>pop</code> </li>
+    <li><code>@rock or @pop</code> - 返回多个标签中一个即可的笔记</li>
+    <li><code>@year&lt;=2000</code> - 支持数值比较 (also &gt;, &gt;=, &lt;).</li>
+    <li><code>@dateCreated>=MONTH-1</code> - 上个月创建的笔记</li>
+    <li><code>=handler</code> -执行<code>handler</code>中定义的脚本返回结果</li>
 </ul>
 </p>`;
 
@@ -73,7 +73,7 @@ async function doSearch(searchText) {
     }
 
     if (searchText.trim().length === 0) {
-        infoService.showMessage("Please enter search criteria first.");
+        infoService.showMessage("请先输入搜索条件。");
 
         $searchInput.focus();
 
@@ -85,7 +85,7 @@ async function doSearch(searchText) {
     const response = await server.get('search/' + encodeURIComponent(searchText));
 
     if (!response.success) {
-        infoService.showError("Search failed.", 3000);
+        infoService.showError("搜索失败。", 3000);
         return;
     }
 
@@ -105,7 +105,7 @@ async function doSearch(searchText) {
 
     // have at least some feedback which is good especially in situations
     // when the result list does not change with a query
-    infoService.showMessage("Search finished successfully.");
+    infoService.showMessage("搜索完成。");
 }
 
 async function saveSearch() {
@@ -139,7 +139,7 @@ async function refreshSearch() {
     activeNode.load(true);
     activeNode.setExpanded(true);
 
-    infoService.showMessage("Saved search note refreshed.");
+    infoService.showMessage("已保存的搜索记录已刷新。");
 }
 
 function init() {

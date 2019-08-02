@@ -26,7 +26,7 @@ async function pasteAfter(node) {
         // just do nothing
     }
     else {
-        infoService.throwError("Unrecognized clipboard mode=" + clipboardMode);
+        infoService.throwError("无法识别的剪贴板 模式=" + clipboardMode);
     }
 }
 
@@ -54,7 +54,7 @@ async function pasteInto(node) {
         // just do nothing
     }
     else {
-        infoService.throwError("Unrecognized clipboard mode=" + mode);
+        infoService.throwError("无法识别的剪贴板 模式=" + mode);
     }
 }
 
@@ -62,14 +62,14 @@ function copy(nodes) {
     clipboardIds = nodes.map(node => node.data.noteId);
     clipboardMode = 'copy';
 
-    infoService.showMessage("Note(s) have been copied into clipboard.");
+    infoService.showMessage("笔记已被复制到剪贴板中");
 }
 
 function cut(nodes) {
     clipboardIds = nodes.map(node => node.key);
     clipboardMode = 'cut';
 
-    infoService.showMessage("Note(s) have been cut into clipboard.");
+    infoService.showMessage("笔记已被切入剪贴板");
 }
 
 function isEmpty() {

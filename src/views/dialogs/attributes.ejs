@@ -2,9 +2,9 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title mr-auto">Note attributes</h5>
+                <h5 class="modal-title mr-auto">笔记属性</h5>
 
-                <button class="help-button" type="button" data-help-page="Attributes" title="Help on Attributes">?
+                <button class="help-button" type="button" data-help-page="Attributes" title="属性帮助">?
                 </button>
 
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="margin-left: 0;">
@@ -18,10 +18,10 @@
                     <table id="owned-attributes-table" class="table">
                         <thead>
                         <tr>
-                            <th>Type</th>
-                            <th>Name</th>
-                            <th>Value</th>
-                            <th>Inheritable</th>
+                            <th>类型</th>
+                            <th>名称</th>
+                            <th>取值</th>
+                            <th>可继承</th>
                         </tr>
                         </thead>
                         <tbody data-bind="foreach: ownedAttributes">
@@ -48,12 +48,11 @@
                                 <div class="relation-value input-group" data-bind="visible: type == 'relation'"
                                      style="width: 300px;">
                                     <input class="form-control relation-target-note-id"
-                                           placeholder="search for note by its name"
+                                           placeholder="按名称搜索笔记"
                                            data-bind="noteAutocomplete, value: relationValue, valueUpdate: 'blur', event: { blur: $parent.attributeChanged }">
 
-                                    <div style="color: red" data-bind="if: $parent.isEmptyRelationTarget($index())">Relation
-                                        target note
-                                        can't be empty.
+                                    <div style="color: red" data-bind="if: $parent.isEmptyRelationTarget($index())">
+                                      关系目标笔记不能为空
                                     </div>
                                 </div>
 
@@ -65,12 +64,12 @@
                                     <label>
                                         <input type="checkbox" value="true"
                                                data-bind="checked: labelDefinition.isPromoted"/>
-                                        Promoted
+                                        显示
                                     </label>
 
                                     <div data-bind="visible: labelDefinition.labelType === 'number'"
-                                         title="Precision of floating point numbers - 0 means effectively integer, 2 allows entering e.g. 1.23">
-                                        Number precision: <input type="number" min="0" max="9"
+                                         title="浮点数的精度 -  0表示有效整数，2表示允许输入例如1.23">
+                                        数值精度: <input type="number" min="0" max="9"
                                                                  data-bind="value: labelDefinition.numberPrecision"
                                                                  style="width: 50px;"/>
                                     </div>
@@ -82,23 +81,23 @@
                                     <label>
                                         <input type="checkbox" value="true"
                                                data-bind="checked: relationDefinition.isPromoted"/>
-                                        Promoted
+                                        提升
                                     </label>
                                     <br/>
                                     <label>
-                                        Inverse relation:
+                                        反向关系:
 
                                         <input type="text" value="true" class="attribute-name"
                                                data-bind="value: relationDefinition.inverseRelation"/>
                                     </label>
                                 </div>
                             </td>
-                            <td title="Inheritable relations are automatically inherited to the child notes">
+                            <td title="可继承关系会自动继承到子笔记">
                                 <input type="checkbox" value="1" data-bind="checked: isInheritable"/>
 
                                 &nbsp;
 
-                                <span title="Delete" style="padding: 13px; cursor: pointer;" class="jam jam-trash"
+                                <span title="删除" style="padding: 13px; cursor: pointer;" class="jam jam-trash"
                                       data-bind="click: $parent.deleteAttribute"></span>
                             </td>
                         </tr>
@@ -107,15 +106,15 @@
                 </form>
 
                 <div data-bind="if: inheritedAttributes().length > 0">
-                    <h4>Inherited attributes</h4>
+                    <h4>继承属性</h4>
 
                     <table class="table">
                         <thead>
                         <tr>
-                            <th>Type</th>
-                            <th>Name</th>
-                            <th>Value</th>
-                            <th>Owning note</th>
+                            <th>类型</th>
+                            <th>名称</th>
+                            <th>取值</th>
+                            <th>隶属笔记</th>
                         </tr>
                         </thead>
                         <tbody data-bind="foreach: inheritedAttributes">
@@ -148,7 +147,7 @@
             <div class="modal-footer">
                 <button class="btn btn-primary btn-large" style="width: 200px;" id="save-attributes-button"
                         data-bind="click: save">
-                    Save changes <kbd>enter</kbd></button>
+                    保存更改 <kbd>enter</kbd></button>
             </div>
         </div>
     </div>

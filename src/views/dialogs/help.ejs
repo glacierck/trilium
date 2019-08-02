@@ -2,7 +2,7 @@
     <div class="modal-dialog" role="document" style="min-width: 100%; height: 100%; margin: 0;">
         <div class="modal-content" style="height: auto;">
             <div class="modal-header">
-                <h5 class="modal-title mr-auto">Help (full documentation is available <a class="external" href="https://github.com/zadam/trilium/wiki">online</a>)</h5>
+                <h5 class="modal-title mr-auto">帮助 (<a class="external" href="###">在线文档</a>)</h5>
 
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -12,18 +12,18 @@
                 <div class="card-columns help-cards">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Note navigation</h5>
+                            <h5 class="card-title">笔记导航</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>UP/DOWN</kbd> - go up/down in the list of notes</li>
-                                    <li><kbd>LEFT/RIGHT</kbd> - collapse/expand node</li>
-                                    <li><kbd>ALT+LEFT/RIGHT</kbd> - go back / forwards in the history</li>
-                                    <li><kbd>CTRL+J</kbd> - show <a class="external" href="https://github.com/zadam/trilium/wiki/Note-navigation#jump-to-note">"Jump to" dialog</a></li>
-                                    <li><kbd>CTRL+.</kbd> - scroll to active note</li>
-                                    <li><kbd>BACKSPACE</kbd> - jumps to parent note</li>
-                                    <li><kbd>ALT+C</kbd> - collapse whole note tree</li>
-                                    <li><kbd>ALT+-</kbd> (alt with minus sign) - collapse sub-tree</li>
+                                    <li><kbd>UP/DOWN</kbd> - 在笔记列表中上/下</li>
+                                    <li><kbd>LEFT/RIGHT</kbd> - 折叠/展开节点</li>
+                                    <li><kbd>ALT+LEFT/RIGHT</kbd> - 在历史访问中前进/前进</li>
+                                    <li><kbd>CTRL+J</kbd> - 打开 "打开笔记" 窗口</a></li>
+                                    <li><kbd>CTRL+.</kbd> - 滚动到活动笔记</li>
+                                    <li><kbd>BACKSPACE</kbd> - 跳到父笔记</li>
+                                    <li><kbd>ALT+C</kbd> - 折叠整个笔记结构树</li>
+                                    <li><kbd>ALT+-</kbd> (alt+减号) - 折叠子树</li>
                                 </ul>
                             </p>
                         </div>
@@ -31,19 +31,19 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Tab shortcuts</h5>
+                            <h5 class="card-title">页签快捷方式</h5>
 
                             <p class="card-text">
                             <ul>
-                                <li><kbd>CTRL+click</kbd> (or middle mouse click) on note link opens note in a new tab</li>
+                                <li><kbd>CTRL+click</kbd> (或鼠标中键) 在新的页签卡中打开笔记</li>
                             </ul>
 
-                            Only in desktop (electron build):
+                            仅限桌面版：
                             <ul>
-                                <li><kbd>CTRL+T</kbd> opens empty tab</li>
-                                <li><kbd>CTRL+W</kbd> closes active tab</li>
-                                <li><kbd>CTRL+Tab</kbd> activates next tab</li>
-                                <li><kbd>CTRL+Shift+Tab</kbd> activates previous tab</li>
+                                <li><kbd>CTRL+T</kbd> 打开空页签</li>
+                                <li><kbd>CTRL+W</kbd> 关闭活动页签</li>
+                                <li><kbd>CTRL+Tab</kbd> 点击下一个页签</li>
+                                <li><kbd>CTRL+Shift+Tab</kbd> 点击上一个页签</li>
                             </ul>
                             </p>
                         </div>
@@ -51,13 +51,13 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Creating notes</h5>
+                            <h5 class="card-title">创建笔记</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>CTRL+O</kbd> - creates new note after the active note</li>
-                                    <li><kbd>CTRL+P</kbd> - creates new sub-note into active note</li>
-                                    <li><kbd>F2</kbd> - edit <a class="external" href="https://github.com/zadam/trilium/wiki/Tree concepts#prefix">prefix</a> of active note clone</li>
+                                    <li><kbd>CTRL+O</kbd> - 在活动笔记后新增新笔记</li>
+                                    <li><kbd>CTRL+P</kbd> - 在活动笔记中创建新的子笔记</li>
+                                    <li><kbd>F2</kbd> - 编辑活动笔记克隆的前缀</li>
                                 </ul>
                             </p>
                         </div>
@@ -65,19 +65,19 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Moving / cloning notes</h5>
+                            <h5 class="card-title">移动/克隆笔记</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>CTRL+UP/DOWN</kbd> - move note up/down in the note list</li>
-                                    <li><kbd>CTRL+LEFT/RIGHT</kbd> - move note up in the hierarchy</li>
-                                    <li><kbd>SHIFT+UP/DOWN</kbd> - multi-select note above/below</li>
-                                    <li><kbd>CTRL+A</kbd> - select all notes in the current level</li>
-                                    <li><kbd>CTRL+click</kbd> - select note</li>
-                                <li><kbd>CTRL+C</kbd> - copies active note (or current selection) into clipboard (used for <a class="external" href="https://github.com/zadam/trilium/wiki/Cloning notes">cloning</a>)</li>
-                                    <li><kbd>CTRL+X</kbd> - cuts current (or current selection) note into clipboard (used for moving notes)</li>
-                                    <li><kbd>CTRL+V</kbd> - pastes note(s) as sub-note into active note (which is either move or clone depending on whether it was copied or cut into clipboard)</li>
-                                    <li><kbd>DEL</kbd> - delete note / sub-tree</li>
+                                    <li><kbd>CTRL+UP/DOWN</kbd> - 在笔记列表中向上/向下移动笔记</li>
+                                    <li><kbd>CTRL+LEFT/RIGHT</kbd> - 在层次结构中移动笔记</li>
+                                    <li><kbd>SHIFT+UP/DOWN</kbd> - 上/下方的多选笔记</li>
+                                    <li><kbd>CTRL+A</kbd> - 选中当前级别的所有笔记</li>
+                                    <li><kbd>CTRL+click</kbd> - 选中笔记</li>
+                                    <li><kbd>CTRL+C</kbd> -  将活动（或当前选择）笔记复制到剪贴板（用于克隆笔记)</li>
+                                    <li><kbd>CTRL+X</kbd> - 将活动（或当前选择）笔记剪切到剪贴板（用于移动笔记）</li>
+                                    <li><kbd>CTRL+V</kbd> - 将笔记作为子笔记粘贴到活动笔记中（根据是复制还是剪切操作执行移动或克隆）</li>
+                                    <li><kbd>DEL</kbd> - 删除笔记/子树</li>
                                 </ul>
                             </p>
                         </div>
@@ -85,15 +85,15 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Editing notes</h5>
+                            <h5 class="card-title">编辑笔记</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>ENTER</kbd> in tree pane switches from tree pane into note title. Enter from note title switches focus to text editor. <kbd>CTRL+.</kbd> switches back from editor to tree pane.</li>
-                                    <li><kbd>CTRL+K</kbd> - create / edit external link</li>
-                                    <li><kbd>CTRL+L</kbd> - create internal link</li>
-                                    <li><kbd>ALT+T</kbd> - inserts current date and time at caret position</li>
-                                    <li><kbd>CTRL+.</kbd> - jump away to the tree pane and scroll to active note</li>
+                                    <li><kbd>ENTER</kbd> - 在树中从树节点切换到笔记标题。从笔记标题切换焦点到文本编辑器中。<kbd>CTRL+.</kbd> 从编辑器切换回树节点。</li>
+                                    <li><kbd>CTRL+K</kbd> - 创建/编辑外部链接</li>
+                                    <li><kbd>CTRL+L</kbd> - 创建内部链接</li>
+                                    <li><kbd>ALT+T</kbd> - 在光标处插入当前日期和时间</li>
+                                    <li><kbd>CTRL+.</kbd> - 跳到树窗口并滚动到活动笔记处</li>
                                 </ul>
                             </p>
                         </div>
@@ -101,14 +101,14 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title"><a class="external" href="https://github.com/zadam/trilium/wiki/Text-editor#autoformat">Markdown-like autoformatting</a></h5>
+                            <h5 class="card-title">Markdown-like autoformatting</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>#</kbd>, <kbd>##</kbd>, <kbd>###</kbd> etc. followed by space for headings</li>
-                                    <li><kbd>*</kbd> or <kbd>-</kbd> followed by space for bullet list</li>
-                                    <li><kbd>1.</kbd> or <kbd>1)</kbd> followed by space for numbered list</li>
-                                    <li>start a line with <kbd>&gt;</kbd> followed by space for block quote</li>
+                                    <li><kbd>#</kbd>, <kbd>##</kbd>, <kbd>###</kbd> etc. 等等 空格开后跟标题</li>
+                                    <li><kbd>*</kbd> 或 <kbd>-</kbd> 空格开，子弹列表（bullet）</li>
+                                    <li><kbd>1.</kbd> 或 <kbd>1)</kbd> 空格开，编号列表</li>
+                                    <li><kbd>&gt;</kbd>另起一行 , 空格开，block quote</li>
                                 </ul>
                             </p>
                         </div>
@@ -116,13 +116,13 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Troubleshooting</h5>
+                            <h5 class="card-title">故障排除</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>F5</kbd> or <kbd>CTRL-R</kbd> - reloads Trilium frontend</li>
-                                    <li><kbd>CTRL+SHIFT+I</kbd> - show developer tools</li>
-                                    <li><kbd>ALT+O</kbd> - show SQL console</li>
+                                    <li><kbd>F5</kbd> 或 <kbd>CTRL-R</kbd> - 重新加载界面</li>
+                                    <li><kbd>CTRL+SHIFT+I</kbd> -展示开发人员工具</li>
+                                    <li><kbd>ALT+O</kbd> - 显示SQL控制台</li>
                                 </ul>
                             </p>
                         </div>
@@ -130,14 +130,14 @@
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Other</h5>
+                            <h5 class="card-title">其他</h5>
 
                             <p class="card-text">
                                 <ul>
-                                    <li><kbd>ALT+M</kbd> - distraction-free mode - display only note editor, everything else is hidden</li>
-                                    <li><kbd>CTRL+S</kbd> - toggle search form in tree pane</li>
-                                    <li><kbd>CTRL+F</kbd> - in page search</li>
-                                    <li><kbd>ALT+A</kbd> - show note attributes dialog</li>
+                                    <li><kbd>ALT+M</kbd> - 沉浸式模式 - 仅显示笔记编辑器，其他一切都隐藏</li>
+                                    <li><kbd>CTRL+S</kbd> - 在树中搜索</li>
+                                    <li><kbd>CTRL+F</kbd> - 在页面中搜索</li>
+                                    <li><kbd>ALT+A</kbd> - 显示笔记属性信息框</li>
                                 </ul>
                             </p>
                         </div>

@@ -18,23 +18,23 @@ function AttributesModel() {
     this.inheritedAttributes = ko.observableArray();
 
     this.availableTypes = [
-        { text: "Label", value: "label" },
-        { text: "Label definition", value: "label-definition" },
-        { text: "Relation", value: "relation" },
-        { text: "Relation definition", value: "relation-definition" }
+        { text: "标签", value: "label" },
+        { text: "标签定义", value: "label-definition" },
+        { text: "关系", value: "relation" },
+        { text: "关系定义", value: "relation-definition" }
     ];
 
     this.availableLabelTypes = [
-        { text: "Text", value: "text" },
-        { text: "Number", value: "number" },
-        { text: "Boolean", value: "boolean" },
-        { text: "Date", value: "date" },
-        { text: "URL", value: "url"}
+        { text: "文本", value: "text" },
+        { text: "数值", value: "number" },
+        { text: "真假", value: "boolean" },
+        { text: "日期", value: "date" },
+        { text: "网址", value: "url"}
     ];
 
     this.multiplicityTypes = [
-        { text: "Single value", value: "singlevalue" },
-        { text: "Multi value", value: "multivalue" }
+        { text: "单选", value: "singlevalue" },
+        { text: "多选", value: "multivalue" }
     ];
 
     this.typeChanged = function(data, event) {
@@ -166,7 +166,7 @@ function AttributesModel() {
 
         await showAttributes(attributes);
 
-        infoService.showMessage("Attributes have been saved.");
+        infoService.showMessage("属性已保存。");
 
         const ctx = noteDetailService.getActiveTabContext();
 

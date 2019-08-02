@@ -80,10 +80,10 @@ async function initDbConnection() {
 }
 
 async function createInitialDatabase(username, password) {
-    log.info("Creating initial database ...");
+    log.info("创建初始数据库 ...");
 
     if (await isDbInitialized()) {
-        throw new Error("DB is already initialized");
+        throw new Error("DB已初始化");
     }
 
     const schema = fs.readFileSync(resourceDir.DB_INIT_DIR + '/schema.sql', 'UTF-8');
@@ -97,7 +97,7 @@ async function createInitialDatabase(username, password) {
 
         const rootNote = await new Note({
             noteId: 'root',
-            title: 'root',
+            title: '我的笔记',
             type: 'text',
             mime: 'text/html'
         }).save();

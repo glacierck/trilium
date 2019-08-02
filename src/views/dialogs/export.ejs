@@ -2,7 +2,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Export note "<span class="export-note-title"></span>"</h5>
+                <h5 class="modal-title">导出笔记"<span class="export-note-title"></span>"</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -15,21 +15,21 @@
 
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="export-type" id="export-type-subtree" value="subtree">
-                        <label class="form-check-label" for="export-type-subtree">this note and all of its descendants</label>
+                        <label class="form-check-label" for="export-type-subtree">当前笔记及其所有子集</label>
                     </div>
 
                     <div id="export-subtree-formats" class="format-choice">
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="export-subtree-format" id="export-subtree-format-html"
                                    value="html">
-                            <label class="form-check-label" for="export-subtree-format-html">HTML in TAR archiv - this is recommended since this preserves all the formatting.</label>
+                            <label class="form-check-label" for="export-subtree-format-html">HTML 格式打包到 TAR 包 - 建议这样做，因为这会保留所有格式。</label>
                         </div>
 
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="export-subtree-format" id="export-subtree-format-markdown"
                                    value="markdown">
                             <label class="form-check-label" for="export-subtree-format-markdown">
-                                Markdown - this preserves most of the formatting.
+                                 Markdown - 这保留了大部分格式。
                             </label>
                         </div>
 
@@ -37,7 +37,7 @@
                             <input class="form-check-input" type="radio" name="export-subtree-format" id="export-subtree-format-opml"
                                    value="opml">
                             <label class="form-check-label" for="export-subtree-format-opml">
-                                OPML - outliner interchange format for text only. Formatting, images and files are not included.
+                                OPML - 仅限文本的大纲交换格式，格式，图像和文件不包括在内。
                             </label>
                         </div>
 
@@ -75,7 +75,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary" id="export-button">Export</button>
+                    <button class="btn btn-primary" id="export-button">导出</button>
                 </div>
             </form>
         </div>

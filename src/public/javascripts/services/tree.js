@@ -116,7 +116,7 @@ async function getNodeFromPath(notePath, expand = false, expandOpts = {}) {
             }
 
             if (expand) {
-               parentNode.setExpanded(true, expandOpts);
+                parentNode.setExpanded(true, expandOpts);
             }
 
             let foundChildNode = findChildNode(parentNode, childNoteId);
@@ -745,18 +745,18 @@ async function showTree() {
 }
 
 messagingService.subscribeToMessages(message => {
-   if (message.type === 'refresh-tree') {
-       reload();
-   }
-   else if (message.type === 'open-note') {
-       noteDetailService.activateOrOpenNote(message.noteId);
+    if (message.type === 'refresh-tree') {
+        reload();
+    }
+    else if (message.type === 'open-note') {
+        noteDetailService.activateOrOpenNote(message.noteId);
 
-       if (utils.isElectron()) {
-           const currentWindow = require("electron").remote.getCurrentWindow();
+        if (utils.isElectron()) {
+            const currentWindow = require("electron").remote.getCurrentWindow();
 
-           currentWindow.show();
-       }
-   }
+            currentWindow.show();
+        }
+    }
 });
 
 messagingService.subscribeToSyncMessages(syncData => {

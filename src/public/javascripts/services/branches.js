@@ -70,20 +70,20 @@ async function moveToNode(nodesToMove, toNode) {
         }
 
         await changeNode(async node => {
-                // first expand which will force lazy load and only then move the node
-                // if this is not expanded before moving, then lazy load won't happen because it already contains node
-                // this doesn't work if this isn't a folder yet, that's why we expand second time below
-                await toNode.setExpanded(true);
+            // first expand which will force lazy load and only then move the node
+            // if this is not expanded before moving, then lazy load won't happen because it already contains node
+            // this doesn't work if this isn't a folder yet, that's why we expand second time below
+            await toNode.setExpanded(true);
 
-                node.moveTo(toNode);
-            }, nodeToMove);
+            node.moveTo(toNode);
+        }, nodeToMove);
     }
 }
 
 async function deleteNodes(nodes) {
     nodes = await filterRootNote(nodes);
 
-    if (nodes.length === 0 || !await confirmDialog.confirm('Are you sure you want to delete select note(s) and all the sub-notes?')) {
+    if (nodes.length === 0 || !await confirmDialog.confirm('您确定要删除选择的笔记和所有子笔记吗？')) {
         return false;
     }
 
@@ -133,7 +133,7 @@ async function deleteNodes(nodes) {
         node.setFocus(true);
     }
 
-    infoService.showMessage("Note(s) has been deleted.");
+    infoService.showMessage("笔记已被删除");
 
     return true;
 }

@@ -93,7 +93,7 @@ function FrontendScriptApi(startNote, currentNote, originEntity = null, tabConte
         if (opts.shortcut) {
             $(document).bind('keydown', opts.shortcut, opts.action);
 
-            button.attr("title", "Shortcut " + opts.shortcut);
+            button.attr("title", "快捷键 " + opts.shortcut);
         }
     };
 

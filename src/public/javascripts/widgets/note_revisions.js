@@ -14,7 +14,7 @@ class NoteRevisionsWidget {
         this.ctx = ctx;
         this.$widget = $widget;
         this.$title = this.$widget.find('.widget-title');
-        this.$title.text("Note revisions");
+        this.$title.text("笔记修订");
     }
 
     async renderBody() {
@@ -22,7 +22,7 @@ class NoteRevisionsWidget {
         const revisionItems = await server.get(`notes/${this.ctx.note.noteId}/revisions`);
 
         if (revisionItems.length === 0) {
-            $body.text("No revisions yet...");
+            $body.text("没有修改记录...");
             return;
         }
 

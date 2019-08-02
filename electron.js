@@ -65,13 +65,13 @@ async function createMainWindow() {
         defaultWidth: 1200,
         defaultHeight: 800
     });
-
+    // 创建浏览器窗口。
     const win = new electron.BrowserWindow({
         x: mainWindowState.x,
         y: mainWindowState.y,
         width: mainWindowState.width,
         height: mainWindowState.height,
-        title: 'Trilium Notes',
+        title: 'Trilium 笔记',
         webPreferences: {
             nodeIntegration: true
         },
@@ -91,11 +91,11 @@ async function createMainWindow() {
         }
     });
 
-    // prevent drag & drop to navigate away from trilium
+    // 防止拖放
     win.webContents.on('will-navigate', (ev, targetUrl) => {
         const parsedUrl = url.parse(targetUrl);
 
-        // we still need to allow internal redirects from setup and migration pages
+        // 允许来自设置和迁移页面的内部重定向
         if (!['localhost', '127.0.0.1'].includes(parsedUrl.hostname) || (parsedUrl.path && parsedUrl.path !== '/')) {
             ev.preventDefault();
         }
@@ -103,7 +103,7 @@ async function createMainWindow() {
 
     return win;
 }
-
+// 当全部窗口关闭时退出。
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
@@ -111,11 +111,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
+    // 在macOS上，当单击dock图标并且没有其他窗口打开时，
+    // 通常在应用程序中重新创建一个窗口。
     if (!mainWindow) {
         mainWindow = createMainWindow();
     }
 });
-
+// Electron 会在初始化后并准备
+// 创建浏览器窗口时，调用这个函数。
+// 部分 API 在 ready 事件触发后才能使用。
 app.on('ready', async () => {
     app.setAppUserModelId('com.github.zadam.trilium');
 

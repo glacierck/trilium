@@ -4,7 +4,7 @@
             <div class="modal-header">
                 <h5 class="modal-title mr-auto">Add note link</h5>
 
-                <button type="button" class="help-button" title="Help on links" data-help-page="Links">?</button>
+                <button type="button" class="help-button" title="帮助链接" data-help-page="Links">?</button>
 
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="margin-left: 0 !important;">
                     <span aria-hidden="true">&times;</span>
@@ -13,24 +13,24 @@
             <form id="add-link-form">
                 <div class="modal-body">
                     <div id="add-link-type-div" class="radio">
-                        <label title="Add HTML link to the selected note at cursor in active note">
+                        <label title="在活动笔记中的光标处添加HTML链接">
                             <input type="radio" name="add-link-type" value="html"/>
-                            add normal HTML link</label>
+                            添加HTML链接</label>
 
-                        <label title="Add selected note as a child of active note">
+                        <label title="将所选笔记添加为活动笔记的子项">
                             <input type="radio" name="add-link-type" value="selected-to-active"/>
-                            add selected note to active note</label>
+                            将所选笔记添加到活动笔记</label>
 
-                        <label title="Add active note as a child of the selected note">
+                        <label title="将活动笔记添加为所选笔记的子项">
                             <input type="radio" name="add-link-type" value="active-to-selected"/>
-                            add active note to selected note</label>
+                            将活动笔记添加到所选笔记</label>
                     </div>
 
                     <div class="form-group">
-                        <label for="note-autocomplete">Note</label>
+                        <label for="note-autocomplete">笔记</label>
 
                         <div class="input-group">
-                            <input id="note-autocomplete" class="form-control" placeholder="search for note by its name">
+                            <input id="note-autocomplete" class="form-control" placeholder="按名称搜索笔记">
                         </div>
                     </div>
 
@@ -39,13 +39,13 @@
                         <input id="link-title" class="form-control" style="width: 100%;">
                     </div>
 
-                    <div class="form-group" id="add-link-prefix-form-group" title="Cloned note will be shown in note tree with given prefix">
-                        <label for="clone-prefix">Prefix (optional)</label>
+                    <div class="form-group" id="add-link-prefix-form-group" title="克隆的笔记将显示在带有给定前缀的笔记结构树中">
+                        <label for="clone-prefix">前缀 (optional)</label>
                         <input id="clone-prefix" class="form-control" style="width: 100%;">
                     </div>
                 </div>
                 <div class="modal-footer" style="display: flex; justify-content: space-between;">
-                    <button type="submit" class="btn btn-primary">Add note link <kbd>enter</kbd></button>
+                    <button type="submit" class="btn btn-primary">添加笔记链接 <kbd>enter</kbd></button>
                 </div>
             </form>
         </div>

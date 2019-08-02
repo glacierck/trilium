@@ -201,7 +201,7 @@ class TreeCache {
         const branchId = this.childParentToBranch[key];
 
         if (!branchId) {
-            infoService.throwError("Cannot find branch for child-parent=" + key);
+            infoService.throwError("找不到分支,child-parent =" + key);
         }
 
         return branchId;

@@ -71,7 +71,7 @@ async function execute(e) {
         return;
     }
     else {
-        infoService.showMessage("Query was executed successfully.");
+        infoService.showMessage("查询成功");
     }
 
     const rows = result.rows;

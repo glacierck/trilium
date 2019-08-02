@@ -64,7 +64,7 @@ function NoteTypeContext(ctx) {
         const mime = self.mime();
 
         if (type === 'text') {
-            return 'Text';
+            return '文本';
         }
         else if (type === 'code') {
             if (!mime) {
@@ -77,22 +77,22 @@ function NoteTypeContext(ctx) {
             }
         }
         else if (type === 'render') {
-            return 'Render HTML note';
+            return '渲染 HTML 笔记';
         }
         else if (type === 'file') {
-            return 'File';
+            return '文件';
         }
         else if (type === 'relation-map') {
-            return 'Relation Map';
+            return '关系图';
         }
         else if (type === 'search') {
             return 'Search note'
         }
         else if (type === 'image') {
-            return 'Image'
+            return '图像'
         }
         else {
-            infoService.throwError('Unrecognized type: ' + type);
+            infoService.throwError('无法识别 type: ' + type);
         }
     };
 
@@ -118,7 +118,7 @@ function NoteTypeContext(ctx) {
             return true;
         }
 
-        return confirmDialog.confirm("It is not recommended to change note type when note content is not empty. Do you want to continue anyway?");
+        return confirmDialog.confirm("当笔记内容不为空时，不建议更改笔记类型。你还想继续吗？");
     }
 
     this.selectText = async function() {

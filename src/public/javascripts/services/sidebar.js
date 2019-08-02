@@ -6,7 +6,7 @@ const WIDGET_TPL = `
 <div class="card widget">
     <div class="card-header">        
         <button class="btn btn-sm widget-title" data-toggle="collapse" data-target="#collapseOne">
-            Collapsible Group Item
+            可折叠项目
         </button>
         
         <div class="widget-header-actions"></div>

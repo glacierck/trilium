@@ -28,10 +28,10 @@ class NoteDetailImage {
                 const success = document.execCommand('copy');
 
                 if (success) {
-                    infoService.showMessage("Image copied to the clipboard");
+                    infoService.showMessage("图像已复制到剪贴板");
                 }
                 else {
-                    infoService.showAndLogError("Could not copy the image to clipboard.");
+                    infoService.showAndLogError("无法将图像复制到剪贴板");
                 }
             }
             finally {

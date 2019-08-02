@@ -12,7 +12,7 @@
 
         <input autocomplete="off" value="" class="note-title" tabindex="1">
 
-        <span class="saved-indicator jam jam-check" title="All changes have been saved"></span>
+        <span class="saved-indicator jam jam-check" title="所有更改都已保存"></span>
 
         <div class="hide-toggle" style="display: flex; align-items: center;">
             <button class="btn btn-sm icon-button jam jam-play render-button"
@@ -21,17 +21,17 @@
 
             <button class="btn btn-sm icon-button jam jam-play execute-script-button"
                     style="display: none; margin-right: 10px;"
-                    title="Execute (Ctrl+Enter)"></button>
+                    title="执行 (Ctrl+Enter)"></button>
 
             <div class="btn-group btn-group-xs">
                 <button type="button"
                         class="btn btn-sm icon-button jam jam-shield-check protect-button"
-                        title="Protected note can be viewed and edited only after entering password">
+                        title="只有输入密码后才能查看和编辑受保护的笔记">
                 </button>
 
                 <button type="button"
                         class="btn btn-sm icon-button jam jam-shield-close unprotect-button"
-                        title="Not protected note can be viewed without entering password">
+                        title="无需输入密码即可查看未受保护的笔记">
                 </button>
             </div>
 
@@ -40,17 +40,17 @@
             <div class="note-type-wrapper" style="display: flex;">
                 <div class="dropdown note-type">
                     <button data-bind="disable: isDisabled()" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-sm dropdown-toggle">
-                        Type: <span data-bind="text: typeString()"></span>
+                        类型: <span data-bind="text: typeString()"></span>
                         <span class="caret"></span>
                     </button>
                     <div class="note-type-dropdown dropdown-menu dropdown-menu-right">
-                        <a class="dropdown-item" data-bind="click: selectText, css: { selected: type() == 'text' }"><span class="check">&check;</span> <strong>Text</strong></a>
+                        <a class="dropdown-item" data-bind="click: selectText, css: { selected: type() == 'text' }"><span class="check">&check;</span> <strong>文本</strong></a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" data-bind="click: selectRelationMap, css: { selected: type() == 'relation-map' && mime() == '' }"><span class="check">&check;</span> <strong>Relation Map</strong></a>
+                        <a class="dropdown-item" data-bind="click: selectRelationMap, css: { selected: type() == 'relation-map' && mime() == '' }"><span class="check">&check;</span> <strong>关系图</strong></a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" data-bind="click: selectRender, css: { selected: type() == 'render' && mime() == '' }"><span class="check">&check;</span> <strong>Render HTML note</strong></a>
+                        <a class="dropdown-item" data-bind="click: selectRender, css: { selected: type() == 'render' && mime() == '' }"><span class="check">&check;</span> <strong> HTML笔记</strong></a>
                         <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" data-bind="click: selectCode, css: { selected: type() == 'code' && mime() == '' }"><span class="check">&check;</span> <strong>Code</strong></a>
+                        <a class="dropdown-item" data-bind="click: selectCode, css: { selected: type() == 'code' && mime() == '' }"><span class="check">&check;</span> <strong>代码</strong></a>
                         <!-- ko foreach: codeMimeTypes -->
                         <a class="dropdown-item" data-bind="click: $parent.selectCodeMime, css: { selected: $parent.type() == 'code' && $parent.mime() == mime }"><span class="check">&check;</span> <span data-bind="text: title"></span></a>
                         <!-- /ko -->
@@ -59,22 +59,22 @@
 
                 <div class="dropdown note-actions">
                     <button type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-sm dropdown-toggle">
-                        Note actions
+                        笔记操作
                         <span class="caret"></span>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right">
-                        <a class="dropdown-item show-note-revisions-button" data-bind="css: { disabled: type() == 'file' || type() == 'image' }">Revisions</a>
-                        <a class="dropdown-item show-attributes-button"><kbd>Alt+A</kbd> Attributes</a>
-                        <a class="dropdown-item show-link-map-button">Link map</a>
-                        <a class="dropdown-item show-source-button" data-bind="css: { disabled: type() != 'text' && type() != 'code' && type() != 'relation-map' && type() != 'search' }">Note source</a>
-                        <a class="dropdown-item import-files-button">Import files</a>
-                        <a class="dropdown-item export-note-button" data-bind="css: { disabled: type() != 'text' }">Export note</a>
-                        <a class="dropdown-item print-note-button">Print note</a>
-                        <a class="dropdown-item show-note-info-button">Note info</a>
+                        <a class="dropdown-item show-note-revisions-button" data-bind="css: { disabled: type() == 'file' || type() == 'image' }">修订记录</a>
+                        <a class="dropdown-item show-attributes-button"><kbd>Alt+A</kbd> 属性</a>
+                        <a class="dropdown-item show-link-map-button">链接地图</a>
+                        <a class="dropdown-item show-source-button" data-bind="css: { disabled: type() != 'text' && type() != 'code' && type() != 'relation-map' && type() != 'search' }">笔记源码</a>
+                        <a class="dropdown-item import-files-button">导入笔记</a>
+                        <a class="dropdown-item export-note-button" data-bind="css: { disabled: type() != 'text' }">导出笔记</a>
+                        <a class="dropdown-item print-note-button">打印笔记</a>
+                        <a class="dropdown-item show-note-info-button">笔记信息</a>
                     </div>
                 </div>
 
-                <button class="btn btn-sm icon-button jam jam-chevron-left show-sidebar-button" title="Show sidebar"></button>
+                <button class="btn btn-sm icon-button jam jam-chevron-left show-sidebar-button" title="显示侧边栏"></button>
             </div>
         </div>
     </div>

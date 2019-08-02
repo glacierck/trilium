@@ -19,11 +19,11 @@ class TreeContextMenu {
 
     getNoteTypeItems(baseCmd) {
         return [
-            { title: "Text", cmd: baseCmd + "_text", uiIcon: "file" },
-            { title: "Code", cmd: baseCmd + "_code", uiIcon: "terminal" },
-            { title: "Saved search", cmd: baseCmd + "_search", uiIcon: "search-folder" },
-            { title: "Relation Map", cmd: baseCmd + "_relation-map", uiIcon: "map" },
-            { title: "Render HTML note", cmd: baseCmd + "_render", uiIcon: "play" }
+            { title: "文本", cmd: baseCmd + "_text", uiIcon: "file" },
+            { title: "代码", cmd: baseCmd + "_code", uiIcon: "terminal" },
+            { title: "保存搜索", cmd: baseCmd + "_search", uiIcon: "search-folder" },
+            { title: "关系图", cmd: baseCmd + "_relation-map", uiIcon: "map" },
+            { title: "HTML笔记", cmd: baseCmd + "_render", uiIcon: "play" }
         ];
     }
 
@@ -39,47 +39,47 @@ class TreeContextMenu {
         // it's clear what the user meant to do.
         const selNodes = treeService.getSelectedNodes();
         const noSelectedNotes = selNodes.length === 0
-                || (selNodes.length === 1 && selNodes[0] === this.node);
+            || (selNodes.length === 1 && selNodes[0] === this.node);
 
         const insertNoteAfterEnabled = isNotRoot && !isHoisted && parentNote.type !== 'search';
         const insertChildNoteEnabled = note.type !== 'search';
 
         return [
-            { title: "Open in new tab", cmd: "openInTab", uiIcon: "empty", enabled: noSelectedNotes },
-            { title: "Insert note after <kbd>Ctrl+O</kbd>", cmd: "insertNoteAfter", uiIcon: "plus",
+            { title: "在新页签中打开", cmd: "openInTab", uiIcon: "empty", enabled: noSelectedNotes },
+            { title: "新同级笔记 <kbd>Ctrl+O</kbd>", cmd: "insertNoteAfter", uiIcon: "plus",
                 items: insertNoteAfterEnabled ? this.getNoteTypeItems("insertNoteAfter") : null,
                 enabled: insertNoteAfterEnabled && noSelectedNotes },
-            { title: "Insert child note <kbd>Ctrl+P</kbd>", cmd: "insertChildNote", uiIcon: "plus",
+            { title: "新子级笔记 <kbd>Ctrl+P</kbd>", cmd: "insertChildNote", uiIcon: "plus",
                 items: insertChildNoteEnabled ? this.getNoteTypeItems("insertChildNote") : null,
                 enabled: insertChildNoteEnabled && noSelectedNotes },
-            { title: "Delete <kbd>Delete</kbd>", cmd: "delete", uiIcon: "trash",
+            { title: "删除 <kbd>Delete</kbd>", cmd: "delete", uiIcon: "trash",
                 enabled: isNotRoot && !isHoisted && parentNote.type !== 'search' },
             { title: "----" },
-            isHoisted ? null : { title: "Hoist note <kbd>Ctrl-H</kbd>", cmd: "hoist", uiIcon: "empty", enabled: noSelectedNotes },
-            !isHoisted || !isNotRoot ? null : { title: "Unhoist note <kbd>Ctrl-H</kbd>", cmd: "unhoist", uiIcon: "arrow-up" },
-            { title: "Edit branch prefix <kbd>F2</kbd>", cmd: "editBranchPrefix", uiIcon: "empty",
+            isHoisted ? null : { title: "提升笔记 <kbd>Ctrl-H</kbd>", cmd: "hoist", uiIcon: "empty", enabled: noSelectedNotes },
+            !isHoisted || !isNotRoot ? null : { title: "降级笔记 <kbd>Ctrl-H</kbd>", cmd: "unhoist", uiIcon: "arrow-up" },
+            { title: "编辑分支前缀 <kbd>F2</kbd>", cmd: "editBranchPrefix", uiIcon: "empty",
                 enabled: isNotRoot && parentNote.type !== 'search' && noSelectedNotes},
             { title: "----" },
-            { title: "Protect subtree", cmd: "protectSubtree", uiIcon: "shield-check", enabled: noSelectedNotes },
-            { title: "Unprotect subtree", cmd: "unprotectSubtree", uiIcon: "shield-close", enabled: noSelectedNotes },
+            { title: "保护子树", cmd: "protectSubtree", uiIcon: "shield-check", enabled: noSelectedNotes },
+            { title: "取消保护子树", cmd: "unprotectSubtree", uiIcon: "shield-close", enabled: noSelectedNotes },
             { title: "----" },
-            { title: "Copy / clone <kbd>Ctrl+C</kbd>", cmd: "copy", uiIcon: "files",
+            { title: "复制/克隆 <kbd>Ctrl+C</kbd>", cmd: "copy", uiIcon: "files",
                 enabled: isNotRoot },
-            { title: "Cut <kbd>Ctrl+X</kbd>", cmd: "cut", uiIcon: "scissors",
+            { title: "剪切 <kbd>Ctrl+X</kbd>", cmd: "cut", uiIcon: "scissors",
                 enabled: isNotRoot },
-            { title: "Paste into <kbd>Ctrl+V</kbd>", cmd: "pasteInto", uiIcon: "clipboard",
+            { title: "粘贴(子级) <kbd>Ctrl+V</kbd>", cmd: "pasteInto", uiIcon: "clipboard",
                 enabled: !clipboard.isEmpty() && note.type !== 'search' && noSelectedNotes },
-            { title: "Paste after", cmd: "pasteAfter", uiIcon: "clipboard",
+            { title: "粘贴(同级)", cmd: "pasteAfter", uiIcon: "clipboard",
                 enabled: !clipboard.isEmpty() && isNotRoot && parentNote.type !== 'search' && noSelectedNotes },
             { title: "----" },
-            { title: "Export", cmd: "export", uiIcon: "empty",
+            { title: "导出", cmd: "export", uiIcon: "empty",
                 enabled: note.type !== 'search' && noSelectedNotes },
-            { title: "Import into note", cmd: "importIntoNote", uiIcon: "empty",
+            { title: "导入", cmd: "importIntoNote", uiIcon: "empty",
                 enabled: note.type !== 'search' && noSelectedNotes },
             { title: "----" },
-            { title: "Collapse subtree <kbd>Alt+-</kbd>", cmd: "collapseSubtree", uiIcon: "align-justify", enabled: noSelectedNotes },
-            { title: "Force note sync", cmd: "forceNoteSync", uiIcon: "refresh", enabled: noSelectedNotes },
-            { title: "Sort alphabetically <kbd>Alt+S</kbd>", cmd: "sortAlphabetically", uiIcon: "empty", enabled: noSelectedNotes }
+            { title: "折叠子树 <kbd>Alt+-</kbd>", cmd: "collapseSubtree", uiIcon: "align-justify", enabled: noSelectedNotes },
+            { title: "强制同步", cmd: "forceNoteSync", uiIcon: "refresh", enabled: noSelectedNotes },
+            { title: "按字母顺序排序 <kbd>Alt+S</kbd>", cmd: "sortAlphabetically", uiIcon: "empty", enabled: noSelectedNotes }
         ].filter(row => row !== null);
     }
 

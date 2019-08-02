@@ -122,7 +122,7 @@ function tabContextMenu(e) {
     contextMenuService.initContextMenu(e, {
         getContextMenuItems: () => {
             return [
-                {title: "Open note in new tab", cmd: "openNoteInNewTab", uiIcon: "arrow-up-right"}
+                {title: "在新页签中打开", cmd: "openNoteInNewTab", uiIcon: "arrow-up-right"}
             ];
         },
         selectContextMenuItem: (e, cmd) => {

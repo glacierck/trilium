@@ -55,10 +55,10 @@ function handleMessage(event) {
         $outstandingSyncsCount.html(message.outstandingSyncs);
     }
     else if (message.type === 'sync-hash-check-failed') {
-        infoService.showError("Sync check failed!", 60000);
+        infoService.showError("同步检查失败！", 60000);
     }
     else if (message.type === 'consistency-checks-failed') {
-        infoService.showError("Consistency checks failed! See logs for details.", 50 * 60000);
+        infoService.showError("一致性检查失败！请参阅日志了解详情。", 50 * 60000);
     }
 }
 

@@ -96,7 +96,7 @@ class NoteDetailCode {
             await server.post('script/run/' + this.ctx.note.noteId);
         }
 
-        infoService.showMessage("Note executed");
+        infoService.showMessage("笔记执行");
     }
 
     onNoteChange(func) {

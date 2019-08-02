@@ -10,8 +10,8 @@ const YEAR_LABEL = 'yearNote';
 const MONTH_LABEL = 'monthNote';
 const DATE_LABEL = 'dateNote';
 
-const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 async function createNote(parentNoteId, noteTitle, noteText) {
     return (await noteService.createNewNote(parentNoteId, {
@@ -36,7 +36,7 @@ async function getRootCalendarNote() {
 
     if (!rootNote) {
         rootNote = (await noteService.createNewNote('root', {
-            title: 'Calendar',
+            title: '日历',
             target: 'into',
             isProtected: false
         })).note;
