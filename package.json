@@ -13,11 +13,14 @@
     "url": "https://github.com/zadam/trilium.git"
   },
   "scripts": {
-    "start-server": "TRILIUM_ENV=dev node ./src/www",
-    "start-electron": "TRILIUM_ENV=dev electron . --disable-gpu",
+    "start": "cross-env TRILIUM_ENV=dev node ./src/www",
+    "start-server": "cross-env TRILIUM_ENV=dev node ./src/www",
+    "start-electron": "cross-env TRILIUM_ENV=dev electron . --disable-gpu",
     "build-backend-docs": "jsdoc -c jsdoc-conf.json -d ./docs/backend_api src/entities/*.js src/services/backend_script_api.js",
     "build-frontend-docs": "jsdoc -c jsdoc-conf.json -d ./docs/frontend_api src/public/javascripts/entities/*.js src/public/javascripts/services/frontend_script_api.js",
     "build-docs": "npm run build-backend-docs && npm run build-frontend-docs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -77,11 +80,11 @@
     "xml2js": "0.4.19"
   },
   "devDependencies": {
+    "cross-env": "^5.2.0",
     "devtron": "1.4.0",
-    "electron": "6.0.0-beta.14",
+    "electron": "6.0.0",
     "electron-builder": "21.1.5",
     "electron-compile": "6.4.4",
-    "electron-installer-debian": "2.0.0",
     "electron-packager": "14.0.2",
     "electron-rebuild": "1.8.5",
     "lorem-ipsum": "2.0.3",
